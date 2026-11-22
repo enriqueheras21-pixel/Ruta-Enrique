@@ -338,7 +338,7 @@
     } catch { return null; }
   }
   async function ensureMatrix(r) {
-    const m = await buildMatrix([depotOf(r), ...r.stops]);
+    const m = await buildMatrix([depotOf(r), ...(r.here ? [hereOf(r)] : []), ...r.stops]);
     if (m) MAT[r.id] = m;
     return MAT[r.id] || HAV;
   }
@@ -350,11 +350,16 @@
   const depotOf = r => ({ id: '__depot', lat: r.start.lat, lng: r.start.lng });
   const ctx = r => ({ depot: depotOf(r), back: r.returnToStart !== false });
   const startMinOf = r => (r.load && r.load.min != null) ? r.load.min : toMin(r.startTime);
+  // Punto "estoy aquí" (GPS) guardado al reoptimizar en plena ruta
+  const hereOf = r => ({ id: '__here', lat: r.here.lat, lng: r.here.lng });
+  // Desde dónde se calcula lo que falta: el GPS (si es lo más reciente), la última entrega o la base
   function origin(r, c) {
     const done = r.stops.filter(s => s.status !== 'pending');
-    if (!done.length) return { start: c.depot, t0: startMinOf(r) };
     const last = done[done.length - 1];
-    return { start: last, t0: (last.doneMin ?? startMinOf(r)) + SERVICE_MIN };
+    const lastMin = last ? (last.doneMin ?? startMinOf(r)) + SERVICE_MIN : startMinOf(r);
+    if (r.here && r.here.min >= lastMin - SERVICE_MIN) return { start: hereOf(r), t0: r.here.min, gps: true };
+    if (!last) return { start: c.depot, t0: startMinOf(r) };
+    return { start: last, t0: lastMin };
   }
   function simulate(order, start, t0, c, m) {
     let t = t0, km = 0, pen = 0, prev = start;
@@ -427,7 +432,7 @@
     pending.forEach((s, i) => { const l = sim.legs[i]; s.etaMin = l.start; s.legKm = l.km; s.late = l.late; });
     let finish = sim.finish;
     if (!pending.length) finish = done.length ? (done[done.length - 1].doneMin ?? t0) + SERVICE_MIN + (c.back ? m.dur(done[done.length - 1], c.depot) : 0) : t0;
-    return { km: sim.km, finish, remainMin: finish - t0, late: sim.legs.filter(l => l.late).length, pending: pending.length, done: done.length, total: r.stops.length, real: m.real };
+    return { km: sim.km, finish, remainMin: finish - t0, late: sim.legs.filter(l => l.late).length, pending: pending.length, done: done.length, total: r.stops.length, real: m.real, gps: !!origin(r, c).gps };
   }
   // Totales del circuito completo (base ? todas las paradas ? base)
   function totals(r) {
@@ -580,7 +585,7 @@
     $('routeTitle').textContent = `${r.name} · ${dateLabel(r.date)}`;
     const endTxt = r.endedMin != null ? `Finalizó a las ${hhmm(r.endedMin)}` : `Finaliza a las ${hhmm(t.endEst)}`;
     $('summary').textContent = sm.total ? `${endTxt} · ${sm.pending} parada${sm.pending === 1 ? '' : 's'} pendiente${sm.pending === 1 ? '' : 's'} · ${fmtDist(t.km)} · ${fmtDur(t.durMin)}` : 'Ruta vacía';
-    $('calcInfo').textContent = !sm.total ? '' : (sm.real ? 'Tiempos por calle (con margen de tráfico)' : 'Tiempos estimados en línea recta') + (sm.late ? ` · ? ${sm.late} atrasada${sm.late > 1 ? 's' : ''}` : '');
+    $('calcInfo').textContent = !sm.total ? '' : (sm.gps ? '? Desde tu ubicación actual · ' : '') + (sm.real ? 'Tiempos por calle (con margen de tráfico)' : 'Tiempos estimados en línea recta') + (sm.late ? ` · ? ${sm.late} atrasada${sm.late > 1 ? 's' : ''}` : '');
     $('navApp').value = prefs.navApp;
     $('loadBtn').textContent = r.load ? `? Cargado ${hhmm(r.load.min)}` : '? Cargar vehículo';
     $('hint').textContent = ui.select ? '' : !sm.total ? 'Escribe una dirección arriba para agregar la primera parada.'
@@ -924,7 +929,7 @@
     };
     if (r) {
       $('rDup').onclick = () => {
-        const nr = { ...JSON.parse(JSON.stringify(r)), id: uid(), name: autoName(dayStr(1)), date: dayStr(1), optimized: false, geometry: null, load: null, endedMin: null, sample: false, createdAt: Date.now(), updatedAt: Date.now() };
+        const nr = { ...JSON.parse(JSON.stringify(r)), id: uid(), name: autoName(dayStr(1)), date: dayStr(1), optimized: false, geometry: null, load: null, endedMin: null, here: null, sample: false, createdAt: Date.now(), updatedAt: Date.now() };
         nr.stops = nr.stops.map(s => resetStop({ ...s, id: uid() }));
         routes[nr.id] = nr; saveLocal(); closeModal(); openRoute(nr.id); toast('Copia creada para mañana.');
       };
@@ -1196,11 +1201,20 @@
   }
   async function reoptimize() {
     const r = cur(); if (r.stops.filter(s => s.status === 'pending').length < 2) return toast('Hacen falta al menos 2 paradas pendientes');
-    const f = $('routeFooter'); f.innerHTML = '<div class="flex h-16 items-center justify-center text-lg font-bold">Calculando rutas por calle?</div>';
+    const f = $('routeFooter');
+    // Si la ruta ya empezó hoy (salida marcada o alguna entrega), ordena desde donde estás ahora (GPS)
+    let gpsOk = false;
+    const started = r.date === dayStr(0) && (r.load || r.stops.some(s => s.status !== 'pending'));
+    if (started) {
+      f.innerHTML = '<div class="flex h-16 items-center justify-center text-lg font-bold">? Buscando tu ubicación?</div>';
+      const pos = await myPosition();
+      if (pos) { r.here = { lat: pos.lat, lng: pos.lng, min: nowMin() }; gpsOk = true; }
+    }
+    f.innerHTML = '<div class="flex h-16 items-center justify-center text-lg font-bold">Calculando rutas por calle?</div>';
     const m = await ensureMatrix(r), before = schedule(r).km;
     optimize(r, m); changed(r, { keepOptimized: true }); render();
     const saved = before - schedule(r).km;
-    toast((saved > 0.5 ? `Ruta optimizada: ${fmtDist(saved)} menos` : 'Ruta optimizada') + (m.real ? '' : ' (sin conexión: distancias estimadas)'));
+    toast((saved > 0.5 ? `Ruta optimizada: ${fmtDist(saved)} menos` : 'Ruta optimizada') + (gpsOk ? ' desde tu ubicación actual' : (started ? ' (sin GPS: desde tu última entrega)' : '')) + (m.real ? '' : ' (sin conexión: distancias estimadas)'));
   }
   function openDeleteMenu(r) {
     const done = r.stops.filter(s => s.status !== 'pending').length;
@@ -1213,7 +1227,7 @@
     let sure = false;
     $('dAll').onclick = () => {
       if (!sure) { sure = true; $('dAll').textContent = 'Toca otra vez para confirmar'; $('dAll').className = 'h-14 w-full rounded-xl bg-red-600 px-4 text-left font-bold text-white'; return; }
-      r.stops = []; r.endedMin = null; changed(r); closeModal(); render(); toast('Todas las paradas eliminadas');
+      r.stops = []; r.endedMin = null; r.here = null; changed(r); closeModal(); render(); toast('Todas las paradas eliminadas');
     };
   }
   function finishSelection() {
