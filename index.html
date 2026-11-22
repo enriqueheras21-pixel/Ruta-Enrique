@@ -746,7 +746,7 @@
     }
     const sel = ui.select;
     $('list').innerHTML = r.stops.map((s, i) => {
-      const pending = s.status === 'pending', active = !sel && s.id === ui.activeId;
+      const pending = s.status === 'pending', isNext = !sel && s.id === next?.id;
       const est = pending ? s.etaMin : (s.plannedMin ?? s.etaMin);
       const time = pending ? (s.etaMin != null ? hhmm(s.etaMin) : '') : (s.doneMin != null ? hhmm(s.doneMin) : '');
       const timeCls = pending ? (s.late ? 'text-red-600' : '') : (devClass(s.doneMin, est) === 'late' ? 'text-red-600' : 'text-green-700 dark:text-green-400');
@@ -765,7 +765,7 @@
       if (s.status === 'failed') status = `<p class="mt-1 text-sm font-semibold text-red-700 dark:text-red-400">\u2716 No entregada: ${esc(s.pod?.reasonLabel || '')}</p>`;
       if (!pending && s.pod?.note) status += `<p class="text-sm text-slate-500">${esc(s.pod.note)}</p>`;
 
-      const actions = !sel && pending && (active || s.id === next?.id) ? `
+      const actions = isNext ? `
         <div class="mt-3 grid grid-cols-3 gap-2">
           <a href="${navUrl(prefs.navApp, s)}" target="_blank" rel="noopener" class="${ACTION} bg-blue-600 text-white">${ICON.nav} Ir</a>
           ${s.customerPhone ? `<a href="${waUrl(s)}" target="_blank" rel="noopener" class="${ACTION} bg-emerald-600 text-white">${ICON.chat} Aviso</a>` : `<button data-act="note" data-id="${s.id}" class="${ACTION} bg-slate-100 dark:bg-slate-800">\ud83d\udcdd Nota</button>`}
@@ -783,7 +783,7 @@
         : `<span class="handle grid h-10 w-8 shrink-0 cursor-grab touch-none place-items-center text-slate-400 ${pending ? '' : 'invisible'}" aria-label="Arrastrar">${ICON.grip}</span>`;
       const num = `<span class="grid h-8 w-8 place-items-center rounded-full text-sm font-bold ${badge(s)}">${pending ? i + 1 : (s.status === 'delivered' ? '\u2713' : '\u2715')}</span>`;
       return `<li id="stop-${s.id}" data-id="${s.id}" data-act="select"
-          class="${ROW} ${active || checked ? 'bg-blue-50 dark:bg-slate-900' : ''} ${s.id === next?.id && !sel ? 'ring-2 ring-inset ring-blue-200 dark:ring-blue-900' : ''}">
+          class="${ROW} ${isNext || checked ? 'bg-blue-50 dark:bg-slate-900' : ''} ${isNext ? 'ring-2 ring-inset ring-blue-200 dark:ring-blue-900' : ''}">
         ${tlLeft(num, time, timeCls)}
         <div class="min-w-0 flex-1">
           ${pending ? legLine(s.legMin, s.legKm) : ''}
