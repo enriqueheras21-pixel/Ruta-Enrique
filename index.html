@@ -60,12 +60,12 @@
 <body class="bg-slate-200 text-slate-900 dark:bg-black dark:text-slate-100">
 <div id="app" class="relative mx-auto h-[100dvh] max-w-md overflow-hidden bg-white dark:bg-slate-950 md:max-w-3xl">
 
-  <!-- ===== Vista 1: Mis rutas ===== -->
+  <!-- ===== Vista 1: Historial de rutas (se abre con el boton de menu de la ruta) ===== -->
   <section id="viewList" class="flex h-full flex-col">
     <header class="flex items-center gap-3 px-4 pb-3" style="padding-top:max(env(safe-area-inset-top),14px)">
-      <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAJAAAACQCAMAAADQmBKKAAABgFBMVEUapN9KcqZqmrEBGVApT5sAF1AKZOIFIFscWHgCG1EADjQFYO8ADTFhkchnzOLQ3OQADDIFYfECYOs0n7uEproBEzUAAP+PpMsAVVUAY7EAP78A//+IxuEAFVEACjQDJY4BGmwGK60IOMkBJXIJM7cIRdkAAAAFVucEOG0EJlPP/PwGRnP0/f0ADUMDY/EFNo4GSIwBFDly9/kDHoUKZouN+PkGTeGx9/gIWIkFNFoGVXkv1/MKSK005/UUt+pR9fsHVbApyO+r6OwRp+lM2O0WxuxL6fZNl60uiK1wt8Zv6PEraI5q2eiO6O4ud5VPuNNUprgPmOeKx9Mzp8toqroNZrIYd6wymcd1xNEy9voylLMvtdU0g5wuue6R09xKqsyV3ONJiaUWc5QqWYxOxNhOyucNVc0X1vMAAFUAAH8Li+UseKup3OMAAT3N6O0qSngahbM3xNxEg5sAf/8b5PQwaq5trsWr1NwAFE8BFVACV/cuiMdLlcWPusmqy9cADDbyRV6NAAAAgHRSTlP///+f/yjVzf5fyVpc////oJ8r//8nAf8DAwQB//7+//7///7//wD+/v7//v/+/v///v/////+///+//////////////////7////+/////////////////////////////////////wQC////Bv/////+Av////9SxAv/////KXts+tIAABflSURBVHjavZyJX9pot8dxae0+3WZ5770JaKwNRApCKJGIEQwJOxQQ3Hdrpzp2X6bb/OvvOc+TkAAJi53PPa2CMSRffmd5VvHM9diXd/Dt/s17V68+adtjYs8Ne9RpS7NLs10WQvN64X+nccSmpiauX4Gb/Pmi9+6eHpzfkOaqDQPtqR1gxjJ6+2m7OTMQ89ltijC9GAD0DnBu3uuEIUBPn7oQzfQQ9SBZVD5fB9TEdZSpHxA46+bVLj8NABoskTsQyPS5m8jTiXPfFjdPXCXqD9RPoS63MT7f31c6kWxAX+b+c++JnefJ5YC8wwP5GMbHTLywR5LHps+XDp6uMLITzXQTDQnkM4A4GxAgTVyxadQG+s/c/SdP/p+AfB1AINKVub+6gd7N3XzyLwE5xpDPOYZM+9wm8gzJA5XIIroskItCHUQeg+f+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" alt="" class="h-11 w-11 rounded-xl">
+      <button id="todayBtn" aria-label="Volver a la ruta de hoy" class="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-slate-100 text-3xl font-bold leading-none dark:bg-slate-800">&lsaquo;</button>
       <div class="min-w-0 flex-1">
-        <h1 class="text-2xl font-bold leading-tight">Mis rutas</h1>
+        <h1 class="text-2xl font-bold leading-tight">Historial</h1>
         <p id="baseInfo" class="truncate text-xs font-semibold text-slate-500"></p>
       </div>
       <button id="globalBtn" aria-label="Ajustes generales" class="grid h-12 w-12 place-items-center rounded-xl border-2 border-slate-300 text-xl dark:border-slate-700">&#x2699;</button>
@@ -81,7 +81,7 @@
   <section id="viewRoute" class="relative hidden h-full md:flex-row" style="--sheetH:58%">
     <div id="mapWrap" class="absolute inset-0 z-0 md:static md:h-full md:flex-1">
       <div id="map" class="h-full w-full"></div>
-      <button id="backBtn" aria-label="Volver a mis rutas" class="absolute left-3 z-[500] grid h-12 w-12 place-items-center rounded-full bg-white text-3xl font-bold leading-none shadow-lg dark:bg-slate-800" style="top:max(env(safe-area-inset-top),12px)">&lsaquo;</button>
+      <button id="backBtn" aria-label="Historial de rutas" class="absolute left-3 z-[500] grid h-12 w-12 place-items-center rounded-full bg-white text-2xl leading-none shadow-lg dark:bg-slate-800" style="top:max(env(safe-area-inset-top),12px)">&#9776;</button>
       <button id="themeMapBtn" aria-label="Cambiar tema" class="themeBtn absolute right-3 z-[500] grid h-12 w-12 place-items-center rounded-full bg-white text-xl shadow-lg dark:bg-slate-800" style="top:max(env(safe-area-inset-top),12px)"></button>
       <button id="locBtn" aria-label="Mi ubicaci&oacute;n" class="absolute right-3 z-[500] grid h-12 w-12 place-items-center rounded-full bg-white text-xl shadow-lg dark:bg-slate-800 md:!bottom-6" style="bottom:calc(var(--sheetH) + 12px)">&#9678;</button>
     </div>
@@ -218,6 +218,8 @@
     const d = dateObj(s), t = `${weekday(s)} ${d.getDate()} ${d.toLocaleDateString('es-CL', { month: 'short' }).replace('.', '')}`;
     return t.charAt(0).toUpperCase() + t.slice(1);
   }
+  // Titulo de una ruta: el nombre que Enrique le puso, o si no tiene, la fecha ("Domingo 22 nov")
+  const titleOf = r => r.name || dateName(r.date);
   function autoName(date, exceptId) {
     const n = Object.values(routes).filter(x => x.date === date && x.id !== exceptId && !x.sample).length;
     return n ? `Ruta ${n + 1}` : dateName(date);
@@ -466,11 +468,13 @@
       if (!r.start || r.start.lat == null) r.start = { ...prefs.base };
       r.stops = r.stops || [];
     }
-    // Nombres viejos ("Ruta de la ma\u00f1ana", "Ruta de la tarde", "Ruta") -> fecha del d\u00eda / Ruta 2 / Ruta 3
-    const OLD = ['ruta de la manana', 'ruta de la tarde', 'ruta'];
-    const byDate = {};
-    Object.values(routes).filter(r => !r.sample).sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0)).forEach(r => { (byDate[r.date] = byDate[r.date] || []).push(r); });
-    for (const [d, list] of Object.entries(byDate)) list.forEach((r, i) => { if (OLD.includes(norm(r.name))) r.name = i ? `Ruta ${i + 1}` : dateName(d); });
+    // Limpieza: sin ruta de ejemplo, sin rutas viejas vacias y sin nombres automaticos ("Ruta de la ma\u00f1ana", "Ruta 2"...)
+    for (const r of Object.values(routes)) {
+      if (r.sample || (r.date < dayStr(0) && !r.stops.length)) { delete routes[r.id]; continue; }
+      const n = norm(r.name);
+      if (['ruta de la manana', 'ruta de la tarde', 'ruta', 'ruta transferida'].includes(n) || /^ruta \d+$/.test(n) || n === norm(dateName(r.date)) || / \(copia\)$/.test(n)) r.name = '';
+    }
+    prefs.sampleAdded = true;
     saveLocal();
   }
   function saveLocal() {
@@ -530,6 +534,14 @@
     }
   }
   function goList() { view = 'list'; curId = null; closeModal(); render(); }
+  // Ruta de hoy: la mas reciente del dia; si no hay, se crea vacia (sin nombre, se ve la fecha)
+  function todayRoute() {
+    const list = Object.values(routes).filter(r => r.date === dayStr(0)).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    if (list.length) return list[0];
+    const nr = { id: uid(), name: '', date: dayStr(0), startTime: prefs.defaultStartTime, start: { ...prefs.base }, returnToStart: true, stops: [], optimized: false, createdAt: Date.now(), updatedAt: Date.now() };
+    routes[nr.id] = nr; saveLocal(); return nr;
+  }
+  const openToday = () => openRoute(todayRoute().id);
 
   // ---------- Lista de rutas ----------
   function renderList() {
@@ -552,7 +564,7 @@
       else if (r.optimized) tag = ['Optimizada', 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-200'];
       const ok = r.stops.filter(x => x.status === 'delivered').length, ko = r.stops.filter(x => x.status === 'failed').length;
       html += `<button data-open="${r.id}" class="mb-2 w-full rounded-2xl border-2 border-slate-200 bg-white p-4 text-left active:scale-[.99] dark:border-slate-800 dark:bg-slate-900">
-          <div class="flex items-center justify-between gap-2"><p class="truncate text-lg font-bold">${esc(r.name)}</p>
+          <div class="flex items-center justify-between gap-2"><p class="truncate text-lg font-bold">${esc(titleOf(r))}<span class="text-sm font-semibold text-slate-500"> \u00b7 sale ${hhmm(startMinOf(r))}</span></p>
             <span class="shrink-0 rounded-full px-2 py-0.5 text-xs font-bold ${tag[1]}">${tag[0]}</span></div>
           <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">${s.total} parada${s.total === 1 ? '' : 's'}${ok ? ` \u00b7 \u2705 ${ok}` : ''}${ko ? ` \u00b7 \u274c ${ko}` : ''}${s.total ? ` \u00b7 ${fmtDist(t.km)} \u00b7 termina ${hhmm(t.endReal ?? t.endEst)}` : ''}</p>
         </button>`;
@@ -597,7 +609,7 @@
   function renderRoute() {
     const r = cur(), t = totals(r), sm = t.sm;
     $('routeDay').textContent = weekday(r.date);
-    $('routeTitle').textContent = r.name;
+    $('routeTitle').textContent = r.name ? `${r.name} \u00b7 ${dateLabel(r.date)}` : dateObj(r.date).toLocaleDateString('es-CL', { day: 'numeric', month: 'long' });
     const endTxt = r.endedMin != null ? `Finaliz\u00f3 a las ${hhmm(r.endedMin)}` : `Finaliza a las ${hhmm(t.endEst)}`;
     $('summary').textContent = sm.total ? `${endTxt} \u2022 ${sm.total} parada${sm.total === 1 ? '' : 's'} \u2022 ${fmtDist(t.km)}` : 'Ruta vac\u00eda';
     const info = [];
@@ -913,8 +925,7 @@
         <label class="flex items-center gap-3 rounded-xl border-2 border-slate-200 p-3 text-sm font-semibold dark:border-slate-700">
           <input id="gApply" type="checkbox" class="h-6 w-6"> Aplicar la nueva base tambi\u00e9n a las rutas de hoy y futuras</label>
       </div>
-      <button id="gSave" class="mt-4 h-16 w-full rounded-2xl bg-blue-600 text-lg font-bold text-white">Guardar</button>
-      <button id="gSample" class="mt-2 h-12 w-full rounded-xl border-2 border-slate-300 font-bold dark:border-slate-700">Agregar de nuevo la ruta de ejemplo</button>`);
+      <button id="gSave" class="mt-4 h-16 w-full rounded-2xl bg-blue-600 text-lg font-bold text-white">Guardar</button>`);
     $('gUnits').value = prefs.units; $('gNav').value = prefs.navApp;
     const info = () => { $('gInfo').textContent = `Base actual: ${fullAddress(base)}${base.precise ? '' : ' (ubicaci\u00f3n aproximada: b\u00fascala y el\u00edgela de la lista para precisarla)'}`; };
     info();
@@ -929,7 +940,6 @@
       if ($('gApply').checked) for (const r of Object.values(routes)) if (r.date >= dayStr(0) && r.endedMin == null) { r.start = { ...base }; delete MAT[r.id]; r.geometry = null; }
       saveLocal(); closeModal(); render(); toast('Ajustes guardados');
     };
-    $('gSample').onclick = () => { addSampleRoute(); closeModal(); render(); toast('Ruta de ejemplo agregada'); };
   }
 
   // ---------- Nueva ruta / ajustes de ruta ----------
@@ -939,7 +949,7 @@
     let confirmDelete = false;
     sheet(`${head(r ? 'Ajustes de la ruta' : 'Nueva ruta')}
       <div class="space-y-3">
-        <label class="${LABEL}">Nombre de la ruta<input id="rName" class="${INPUT} mt-1" value="${esc(r ? r.name : autoName(h >= 18 ? dayStr(1) : dayStr(0)))}"></label>
+        <label class="${LABEL}">Nombre (opcional)<input id="rName" class="${INPUT} mt-1" placeholder="Si lo dejas vac\u00edo se ve la fecha" value="${esc(r ? r.name : '')}"></label>
         <div><span class="${LABEL}">D\u00eda</span><div class="mt-1 grid grid-cols-3 gap-2">
           <button type="button" data-day="0" class="dayBtn h-12 rounded-xl border-2 font-bold">Hoy</button>
           <button type="button" data-day="1" class="dayBtn h-12 rounded-xl border-2 font-bold">Ma\u00f1ana</button>
@@ -970,14 +980,9 @@
       b.className = `dayBtn h-12 rounded-xl border-2 font-bold ${on ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-300 dark:border-slate-700'}`;
     });
     document.querySelectorAll('.dayBtn').forEach(b => b.onclick = () => { $('rDate').value = dayStr(+b.dataset.day); paintDays(); });
-    // Si el nombre es el autom\u00e1tico, se actualiza al cambiar el d\u00eda
-    let autoN = !r || r.name === autoName(r.date, r.id);
-    $('rName').oninput = () => { autoN = false; };
-    const syncName = () => { if (autoN && $('rDate').value) $('rName').value = autoName($('rDate').value, r && r.id); };
-    document.querySelectorAll('.dayBtn').forEach(b => b.addEventListener('click', syncName));
-    $('rDate').onchange = () => { paintDays(); syncName(); }; paintDays();
+    $('rDate').onchange = paintDays; paintDays();
     $('rSave').onclick = () => {
-      const d = $('rDate').value, name = $('rName').value.trim() || (d ? autoName(d, r && r.id) : 'Ruta');
+      const d = $('rDate').value, name = $('rName').value.trim();
       if ($('rUseBase').checked) start = { ...prefs.base };
       if (!d || !start) { $('rErr').textContent = !d ? 'Falta el d\u00eda.' : 'Falta el punto de salida.'; $('rErr').classList.remove('hidden'); return; }
       if (r) {
@@ -991,7 +996,7 @@
     };
     if (r) {
       $('rDup').onclick = () => {
-        const nr = { ...JSON.parse(JSON.stringify(r)), id: uid(), name: autoName(dayStr(1)), date: dayStr(1), optimized: false, geometry: null, load: null, endedMin: null, here: null, sample: false, createdAt: Date.now(), updatedAt: Date.now() };
+        const nr = { ...JSON.parse(JSON.stringify(r)), id: uid(), name: '', date: dayStr(1), optimized: false, geometry: null, load: null, endedMin: null, here: null, sample: false, createdAt: Date.now(), updatedAt: Date.now() };
         nr.stops = nr.stops.map(s => resetStop({ ...s, id: uid() }));
         routes[nr.id] = nr; saveLocal(); closeModal(); openRoute(nr.id); toast('Copia creada para ma\u00f1ana.');
       };
@@ -1199,7 +1204,7 @@
     $('printArea').innerHTML = `<div class="sheet-page">
       <h1>${esc(sheetDate(r.date))} - Ruta Enrique</h1>
       <p class="sub">Tiempo total: ${fmtDur(t.durMin)} &nbsp; Distancia total: ${fmtDist(t.km, units)} &nbsp; Paradas: ${r.stops.length}</p>
-      <p class="route-name">${esc(r.name)} \u00b7 Base: ${esc(fullAddress(r.start))}</p>
+      <p class="route-name">${r.name ? esc(r.name) + ' \u00b7 ' : ''}Base: ${esc(fullAddress(r.start))}</p>
       <table class="sheet-table"><thead><tr><th>#</th><th>Direcci\u00f3n</th><th>Hora estimada</th><th>Hora real</th><th>Notas</th></tr></thead>
       <tbody>${rows.map(x => `<tr><td class="num">${x.n}</td><td>${esc(x.addr)}</td><td>${x.est != null ? hhmm(x.est) : ''}</td><td>${cell(x.real, x.est)}</td><td>${esc(x.notes || '')}</td></tr>`).join('')}</tbody></table>
       <p class="sheet-foot">Generado el ${new Date().toLocaleString('es-CL')} \u00b7 ${M(r).real ? 'distancias por calle (OpenStreetMap)' : 'distancias estimadas'}</p></div>`;
@@ -1238,7 +1243,7 @@
   }
   const routeText = r => {
     const t = totals(r);
-    return [`${sheetDate(r.date)} \u00b7 ${r.name}`, `Base: ${fullAddress(r.start)}`, `${r.stops.length} paradas \u00b7 ${fmtDist(t.km)} \u00b7 ${fmtDur(t.durMin)}`, '',
+    return [`${sheetDate(r.date)}${r.name ? ' \u00b7 ' + r.name : ''}`, `Base: ${fullAddress(r.start)}`, `${r.stops.length} paradas \u00b7 ${fmtDist(t.km)} \u00b7 ${fmtDur(t.durMin)}`, '',
       ...r.stops.map((s, i) => `${i + 1}. ${fullAddress(s)}${s.etaMin != null && s.status === 'pending' ? ` (${hhmm(s.etaMin)})` : ''}${s.notes ? ' \u2014 ' + s.notes : ''}`)].join('\n');
   };
   async function copyText(text) {
@@ -1252,11 +1257,11 @@
   async function shareRoute(r) {
     const copy = JSON.parse(JSON.stringify(r)); delete copy.geometry;
     const json = JSON.stringify({ app: 'ruta-enrique', v: 1, route: copy });
-    const fname = `ruta-${r.date}-${norm(r.name).replace(/[^a-z0-9]+/g, '-')}.json`;
+    const fname = `ruta-${r.date}-${norm(titleOf(r)).replace(/[^a-z0-9]+/g, '-')}.json`;
     try {
       const file = new File([json], fname, { type: 'application/json' });
-      if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ title: r.name, text: routeText(r), files: [file] }); return; }
-      if (navigator.share) { await navigator.share({ title: r.name, text: routeText(r) }); return; }
+      if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ title: titleOf(r), text: routeText(r), files: [file] }); return; }
+      if (navigator.share) { await navigator.share({ title: titleOf(r), text: routeText(r) }); return; }
     } catch (e) { if (e.name === 'AbortError') return; }
     const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([json], { type: 'application/json' })); a.download = fname; a.click();
     if (await copyText(routeText(r))) toast('Copia descargada y texto copiado al portapapeles');
@@ -1305,7 +1310,7 @@
     document.querySelectorAll('[data-to]').forEach(b => b.onclick = () => {
       let target = routes[b.dataset.to];
       if (b.dataset.to === '__new') {
-        target = { id: uid(), name: autoName(dayStr(1)), date: dayStr(1), startTime: prefs.defaultStartTime, start: { ...prefs.base }, returnToStart: true, stops: [], optimized: false, createdAt: Date.now(), updatedAt: Date.now() };
+        target = { id: uid(), name: '', date: dayStr(1), startTime: prefs.defaultStartTime, start: { ...prefs.base }, returnToStart: true, stops: [], optimized: false, createdAt: Date.now(), updatedAt: Date.now() };
         routes[target.id] = target;
       }
       const moving = r.stops.filter(s => sel.ids.has(s.id));
@@ -1411,7 +1416,10 @@
   $('routeList').addEventListener('click', e => { const b = e.target.closest('[data-open]'); if (b) openRoute(b.dataset.open); });
   $('newRouteBtn').onclick = () => openRouteForm();
   $('globalBtn').onclick = openGlobal;
+  // El contenedor principal nunca debe quedar corrido (pasaba al escribir en ventanas o al importar)
+  $('app').addEventListener('scroll', () => { if ($('app').scrollTop || $('app').scrollLeft) $('app').scrollTo(0, 0); });
   $('backBtn').onclick = goList;
+  $('todayBtn').onclick = openToday;
   $('settingsBtn').onclick = () => openRouteForm(curId);
   $('menuBtn').onclick = openMenu;
   $('loadBtn').onclick = openLoad;
@@ -1431,7 +1439,12 @@
   function handleBack() {
     if ($('modalRoot').innerHTML) { closeModal(); return true; }
     if ($('sheetView').classList.contains('open')) { $('sheetView').classList.remove('open'); return true; }
-    if (view === 'route') { if (ui.select) { ui.select = null; render(); } else goList(); return true; }
+    if (view === 'route') {
+      if (ui.select) { ui.select = null; render(); return true; }
+      if (cur() && cur().date !== dayStr(0)) { goList(); return true; }   // venia del historial
+      return false;                                                       // ruta de hoy: atras = salir
+    }
+    if (view === 'list') { openToday(); return true; }
     return false;
   }
   history.replaceState({ base: 1 }, '');
@@ -1511,8 +1524,7 @@
   });
 
   loadLocal();
-  if (!prefs.sampleAdded) addSampleRoute();
-  render();
+  openToday();
   loadScript('https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js').then(() => { if (view === 'route' && cur()) renderMap(cur()); }).catch(() => {});
   loadScript('https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js').then(makeSortable).catch(() => {});
   if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
