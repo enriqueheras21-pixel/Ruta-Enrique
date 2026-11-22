@@ -339,7 +339,24 @@
       return { street: a.road || '', house: a.house_number || '', name: a.road ? '' : (r.name || ''), comuna: comunaFrom(p), lat: +r.lat, lng: +r.lon };
     });
   }
+  // Si se escribe "nombre del local + direccion" (ej. "la fiambreria pedro torres 1227") y no hay resultados,
+  // se prueba quitando palabras del comienzo: lo quitado pasa a ser el nombre del local.
   async function searchAddress(raw, signal) {
+    const res = await searchAddress1(raw, signal);
+    if (res.length) return res;
+    const words = raw.trim().split(/\s+/);
+    for (let k = 1; k <= Math.min(4, words.length - 2); k++) {
+      const rest = words.slice(k).join(' ');
+      if (!/[a-z\u00e0-\u00ff]{3,}/i.test(rest)) break;
+      const r2 = await searchAddress1(rest, signal);
+      if (r2.length) {
+        const name = words.slice(0, k).join(' ').replace(/(^|\s)\S/g, m => m.toUpperCase());
+        return r2.map(x => ({ ...x, place: x.place || name, needAddr: false, poi: true }));
+      }
+    }
+    return [];
+  }
+  async function searchAddress1(raw, signal) {
     const { street, num } = parseQuery(raw);
     const ex = expand(street), bare = stripType(ex);
     const withNum = s => (num ? `${s} ${num}` : s);
@@ -700,7 +717,7 @@
         <div class="min-w-0 flex-1">
           <p class="text-lg font-semibold leading-tight">${esc(b.address)}</p>
           <p class="text-sm text-slate-500">${esc([b.comuna, 'Salida de bodega'].filter(Boolean).join(' \u00b7 '))}</p>
-          ${r.load ? `<div class="mt-1 flex flex-wrap gap-1.5 text-xs font-semibold">${chip('Sali\u00f3 ' + hhmm(r.load.min))}${devChip(r.load.min, est)}</div>` : ''}
+          ${r.load ? `<div class="mt-1 flex flex-wrap gap-1.5 text-xs font-semibold">${chip('Sali\u00f3 ' + hhmm(r.load.min))}${Math.abs(r.load.min - est) <= 90 ? devChip(r.load.min, est) : ''}</div>` : ''}
           ${r.load && r.load.note ? `<p class="mt-1 text-sm text-slate-700 dark:text-slate-300">\ud83d\udcdd ${esc(r.load.note)}</p>` : ''}
           ${r.load ? '' : '<button data-now class="mt-2 h-12 w-full rounded-xl bg-blue-600 text-base font-bold text-white active:scale-[.98]">\u23f1 Marcar salida ahora</button>'}
         </div></div>`;
@@ -1806,6 +1823,13 @@
     ensureMatrix(r).then(() => { if (curId === r.id) render(); });
     render(); openStopSheet(nid, { focusNotes: true });
   }, null, q => `<li><button type="button" data-manual class="w-full px-3 py-3 text-left text-sm font-semibold text-blue-700 dark:text-blue-300">\u270e Agregar "${esc(q)}" con m\u00e1s detalles\u2026</button></li>`);
+  $('qAddr').addEventListener('keydown', e => {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    const first = $('qSugg').querySelector('[data-i]');
+    if (first && !$('qSugg').classList.contains('hidden')) first.click();
+    else $('qAddr').dispatchEvent(new Event('input'));
+  });
   $('qSugg').addEventListener('click', e => {
     if (!e.target.closest('[data-manual]')) return;
     const q = $('qAddr').value.trim(); quick.show(''); $('qAddr').value = '';
