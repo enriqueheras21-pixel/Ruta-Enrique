@@ -287,6 +287,10 @@
     return '';
   }
   const fullAddress = s => [s.address, s.comuna].filter(Boolean).join(', ');
+  // Como Spoke: "Nombre del local, Comuna" arriba y la direccion debajo; en la hoja: "Nombre, direccion, comuna"
+  const stopTitle = s => s.customerName ? [s.customerName, s.comuna].filter(Boolean).join(', ') : s.address;
+  const stopSub = s => s.customerName ? fullAddress(s) : (s.comuna || '');
+  const stopLabel = s => s.customerName ? `${s.customerName}, ${fullAddress(s)}` : fullAddress(s);
 
   // =====================================================================
   // 3) B\u00daSQUEDA DE DIRECCIONES (gratis: Photon + Nominatim de OpenStreetMap)
@@ -744,8 +748,8 @@
         ${tlLeft(num, time, timeCls)}
         <div class="min-w-0 flex-1">
           ${pending ? legLine(s.legMin, s.legKm) : ''}
-          <p class="text-lg font-semibold leading-tight ${pending ? '' : 'text-slate-500'}">${esc(s.address)}</p>
-          <p class="truncate text-sm text-slate-500">${esc([s.comuna, s.customerName].filter(Boolean).join(' \u00b7 '))}</p>
+          <p class="text-lg font-semibold leading-tight ${pending ? '' : 'text-slate-500'}">${esc(stopTitle(s))}</p>
+          <p class="truncate text-sm text-slate-500">${esc(stopSub(s))}</p>
           ${chips.length ? `<div class="mt-1 flex flex-wrap gap-1.5 text-xs font-semibold">${chips.join('')}</div>` : ''}
           ${s.notes ? `<p class="mt-1 text-sm text-slate-700 dark:text-slate-300">\ud83d\udcdd ${esc(s.notes)}</p>` : ''}
           ${status}${actions}${edits}
@@ -1194,7 +1198,7 @@
   // ---------- Nota r\u00e1pida ----------
   function openNote(id) {
     const r = cur(), s = r.stops.find(x => x.id === id);
-    sheet(`${head('\ud83d\udcdd Nota de la parada')}<p class="-mt-2 mb-2 truncate text-sm text-slate-500">${esc(fullAddress(s))}</p>
+    sheet(`${head('\ud83d\udcdd Nota de la parada')}<p class="-mt-2 mb-2 truncate text-sm text-slate-500">${esc(stopLabel(s))}</p>
       <textarea id="nNote" rows="3" class="w-full rounded-xl border-2 border-slate-300 bg-transparent p-3 dark:border-slate-700">${esc(s.notes || '')}</textarea>${noteChips('nNote')}
       <button id="nSave" class="mt-4 h-14 w-full rounded-2xl bg-blue-600 text-lg font-bold text-white">Guardar nota</button>`);
     wireChips();
@@ -1207,7 +1211,7 @@
     const r = cur(), s = r.stops.find(x => x.id === id);
     let mode = 'delivered', reason = null, hasPhoto = false, sigReady = false, sigDirty = false;
     sheet(`${head('Prueba de entrega')}
-      <p class="-mt-2 mb-3 truncate text-sm text-slate-600 dark:text-slate-400">${esc(fullAddress(s))}</p>
+      <p class="-mt-2 mb-3 truncate text-sm text-slate-600 dark:text-slate-400">${esc(stopLabel(s))}</p>
       <div class="mb-4 grid grid-cols-2 gap-2"><button id="mOk" class="h-14 rounded-xl text-lg font-bold">Entregada</button><button id="mFail" class="h-14 rounded-xl text-lg font-bold">No entregada</button></div>
       <label class="${LABEL} mb-3">Hora real de llegada<input id="pTime" type="time" class="${INPUT} mt-1" value="${hhmm(r.date === dayStr(0) ? nowMin() : (s.etaMin ?? toMin(r.startTime)))}"></label>
       <div id="okPane" class="space-y-3">
@@ -1275,8 +1279,8 @@
     r.stops.forEach((s, i) => {
       const est = s.status === 'pending' ? s.etaMin : (s.plannedMin ?? s.etaMin);
       const extra = s.status === 'failed' ? `No entregada: ${s.pod?.reasonLabel || ''}` : '';
-      const notes = [s.customerName, s.notes, extra, s.pod?.note].filter(Boolean).join(' \u00b7 ');
-      rows.push({ n: i + 1, addr: fullAddress(s), est, real: s.status !== 'pending' ? s.doneMin : null, notes });
+      const notes = [s.notes, extra, s.pod?.note].filter(Boolean).join(' \u00b7 ');
+      rows.push({ n: i + 1, addr: stopLabel(s), est, real: s.status !== 'pending' ? s.doneMin : null, notes });
     });
     if (r.returnToStart !== false && r.stops.length) rows.push({ n: '', addr: fullAddress(r.start), est: t.endEst, real: r.endedMin, notes: 'Punto de llegada' });
     $('printArea').innerHTML = `<div class="sheet-page">
@@ -1322,7 +1326,7 @@
   const routeText = r => {
     const t = totals(r);
     return [`${sheetDate(r.date)}${r.name ? ' \u00b7 ' + r.name : ''}`, `Base: ${fullAddress(r.start)}`, `${r.stops.length} paradas \u00b7 ${fmtDist(t.km)} \u00b7 ${fmtDur(t.durMin)}`, '',
-      ...r.stops.map((s, i) => `${i + 1}. ${fullAddress(s)}${s.etaMin != null && s.status === 'pending' ? ` (${hhmm(s.etaMin)})` : ''}${s.notes ? ' \u2014 ' + s.notes : ''}`)].join('\n');
+      ...r.stops.map((s, i) => `${i + 1}. ${stopLabel(s)}${s.etaMin != null && s.status === 'pending' ? ` (${hhmm(s.etaMin)})` : ''}${s.notes ? ' \u2014 ' + s.notes : ''}`)].join('\n');
   };
   async function copyText(text) {
     try { await navigator.clipboard.writeText(text); return true; } catch {
@@ -1567,7 +1571,7 @@
     r.stops.push({ id: uid(), status: 'pending', priority: 'normal', address: p.line, comuna: p.comuna, lat: p.lat, lng: p.lng, precise: true, notes: '', customerName: p.place || '' });
     $('qAddr').value = ''; changed(r);
     ensureMatrix(r).then(() => { if (curId === r.id) render(); });
-    render(); toast(`Parada agregada: ${p.line}. Toca la parada para agregar notas.`);
+    render(); toast(`Parada agregada: ${p.place ? p.place + ', ' : ''}${p.line}. Toca la parada para agregar notas.`);
   }, null, q => `<li><button type="button" data-manual class="w-full px-3 py-3 text-left text-sm font-semibold text-blue-700 dark:text-blue-300">\u270e Agregar "${esc(q)}" con m\u00e1s detalles\u2026</button></li>`);
   $('qSugg').addEventListener('click', e => {
     if (!e.target.closest('[data-manual]')) return;
