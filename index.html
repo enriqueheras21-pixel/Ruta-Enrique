@@ -209,6 +209,15 @@
     return t.charAt(0).toUpperCase() + t.slice(1);
   }
   const weekday = s => dateObj(s).toLocaleDateString('es-CL', { weekday: 'long' });
+  // Nombre automático como Spoke: la 1ª ruta del día lleva la fecha ("Domingo 22 nov"); las siguientes "Ruta 2", "Ruta 3"?
+  function dateName(s) {
+    const d = dateObj(s), t = `${weekday(s)} ${d.getDate()} ${d.toLocaleDateString('es-CL', { month: 'short' }).replace('.', '')}`;
+    return t.charAt(0).toUpperCase() + t.slice(1);
+  }
+  function autoName(date, exceptId) {
+    const n = Object.values(routes).filter(x => x.date === date && x.id !== exceptId && !x.sample).length;
+    return n ? `Ruta ${n + 1}` : dateName(date);
+  }
   // "sábado - sáb 21 de nov" (como la hoja de Spoke)
   function sheetDate(s) {
     const d = dateObj(s);
@@ -585,13 +594,14 @@
   // Filas fijas de salida y regreso a la base
   function renderBaseRows(r, t) {
     const b = r.start;
-    const start = `<button data-act="load" class="mb-2 flex w-full items-start gap-2 rounded-2xl border-2 border-slate-200 bg-slate-50 p-3 text-left dark:border-slate-800 dark:bg-slate-900">
+    const start = `<div role="button" class="mb-2 flex w-full cursor-pointer items-start gap-2 rounded-2xl border-2 border-slate-200 bg-slate-50 p-3 text-left dark:border-slate-800 dark:bg-slate-900">
         <span class="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-slate-900 text-lg text-white">?</span>
-        <div class="min-w-0 flex-1"><p class="text-xs font-bold uppercase text-slate-500">Salida · ${esc(hhmm(toMin(r.startTime)))} estimada</p>
+        <div class="min-w-0 flex-1"><p class="text-xs font-bold uppercase text-slate-500">Salida de bodega · ${esc(hhmm(toMin(r.startTime)))} estimada</p>
           <p class="truncate font-semibold">${esc(fullAddress(b))}</p>
-          <div class="mt-1 flex flex-wrap gap-1.5 text-xs font-semibold">${r.load ? chip('Real ' + hhmm(r.load.min)) + devChip(r.load.min, toMin(r.startTime)) : chip('Toca para registrar la carga')}</div>
+          <div class="mt-1 flex flex-wrap gap-1.5 text-xs font-semibold">${r.load ? chip('Real ' + hhmm(r.load.min)) + devChip(r.load.min, toMin(r.startTime)) : chip('Toca para agregar notas')}</div>
           ${r.load && r.load.note ? `<p class="mt-1.5 rounded-lg bg-amber-50 px-2 py-1 text-sm text-amber-900 dark:bg-amber-950 dark:text-amber-200">? ${esc(r.load.note)}</p>` : ''}
-        </div></button>`;
+          ${r.load ? '' : '<button data-now class="mt-2 h-12 w-full rounded-xl bg-blue-600 text-base font-bold text-white active:scale-[.98]">? Marcar salida ahora</button>'}
+        </div></div>`;
     $('startRow').innerHTML = start;
     if (r.returnToStart === false || !r.stops.length) { $('endRow').innerHTML = ''; return; }
     $('endRow').innerHTML = `<button data-act="end" class="mt-2 flex w-full items-start gap-2 rounded-2xl border-2 border-slate-200 bg-slate-50 p-3 text-left dark:border-slate-800 dark:bg-slate-900">
@@ -862,7 +872,7 @@
     let confirmDelete = false;
     sheet(`${head(r ? 'Ajustes de la ruta' : 'Nueva ruta')}
       <div class="space-y-3">
-        <label class="${LABEL}">Nombre de la ruta<input id="rName" class="${INPUT} mt-1" value="${esc(r ? r.name : (h < 13 ? 'Ruta de la mañana' : 'Ruta de la tarde'))}"></label>
+        <label class="${LABEL}">Nombre de la ruta<input id="rName" class="${INPUT} mt-1" value="${esc(r ? r.name : autoName(h >= 18 ? dayStr(1) : dayStr(0)))}"></label>
         <div><span class="${LABEL}">Día</span><div class="mt-1 grid grid-cols-3 gap-2">
           <button type="button" data-day="0" class="dayBtn h-12 rounded-xl border-2 font-bold">Hoy</button>
           <button type="button" data-day="1" class="dayBtn h-12 rounded-xl border-2 font-bold">Mañana</button>
@@ -893,9 +903,14 @@
       b.className = `dayBtn h-12 rounded-xl border-2 font-bold ${on ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-300 dark:border-slate-700'}`;
     });
     document.querySelectorAll('.dayBtn').forEach(b => b.onclick = () => { $('rDate').value = dayStr(+b.dataset.day); paintDays(); });
-    $('rDate').onchange = paintDays; paintDays();
+    // Si el nombre es el automático, se actualiza al cambiar el día
+    let autoN = !r || r.name === autoName(r.date, r.id);
+    $('rName').oninput = () => { autoN = false; };
+    const syncName = () => { if (autoN && $('rDate').value) $('rName').value = autoName($('rDate').value, r && r.id); };
+    document.querySelectorAll('.dayBtn').forEach(b => b.addEventListener('click', syncName));
+    $('rDate').onchange = () => { paintDays(); syncName(); }; paintDays();
     $('rSave').onclick = () => {
-      const name = $('rName').value.trim() || 'Ruta', d = $('rDate').value;
+      const d = $('rDate').value, name = $('rName').value.trim() || (d ? autoName(d, r && r.id) : 'Ruta');
       if ($('rUseBase').checked) start = { ...prefs.base };
       if (!d || !start) { $('rErr').textContent = !d ? 'Falta el día.' : 'Falta el punto de salida.'; $('rErr').classList.remove('hidden'); return; }
       if (r) {
@@ -909,7 +924,7 @@
     };
     if (r) {
       $('rDup').onclick = () => {
-        const nr = { ...JSON.parse(JSON.stringify(r)), id: uid(), name: r.name + ' (copia)', date: dayStr(1), optimized: false, geometry: null, load: null, endedMin: null, sample: false, createdAt: Date.now(), updatedAt: Date.now() };
+        const nr = { ...JSON.parse(JSON.stringify(r)), id: uid(), name: autoName(dayStr(1)), date: dayStr(1), optimized: false, geometry: null, load: null, endedMin: null, sample: false, createdAt: Date.now(), updatedAt: Date.now() };
         nr.stops = nr.stops.map(s => resetStop({ ...s, id: uid() }));
         routes[nr.id] = nr; saveLocal(); closeModal(); openRoute(nr.id); toast('Copia creada para mañana.');
       };
@@ -924,7 +939,7 @@
   // ---------- Cargar vehículo (hora real de salida + notas generales) ----------
   function openLoad() {
     const r = cur(), l = r.load || {};
-    sheet(`${head('? Cargar vehículo')}
+    sheet(`${head('? Salida de bodega / Cargar vehículo')}
       <p class="-mt-2 mb-3 text-sm text-slate-600 dark:text-slate-400">Registra a qué hora saliste de la base con la carga y anota lo que llevas. Las horas de llegada se recalculan desde aquí.</p>
       <div class="space-y-3">
         <label class="${LABEL}">Hora real de salida<input id="lTime" type="time" class="${INPUT} mt-1" value="${hhmm(l.min ?? (r.date === dayStr(0) ? nowMin() : toMin(r.startTime)))}"></label>
@@ -1214,7 +1229,7 @@
     document.querySelectorAll('[data-to]').forEach(b => b.onclick = () => {
       let target = routes[b.dataset.to];
       if (b.dataset.to === '__new') {
-        target = { id: uid(), name: 'Ruta transferida', date: dayStr(1), startTime: prefs.defaultStartTime, start: { ...prefs.base }, returnToStart: true, stops: [], optimized: false, createdAt: Date.now(), updatedAt: Date.now() };
+        target = { id: uid(), name: autoName(dayStr(1)), date: dayStr(1), startTime: prefs.defaultStartTime, start: { ...prefs.base }, returnToStart: true, stops: [], optimized: false, createdAt: Date.now(), updatedAt: Date.now() };
         routes[target.id] = target;
       }
       const moving = r.stops.filter(s => sel.ids.has(s.id));
@@ -1327,7 +1342,12 @@
   $('printBtn').onclick = openSheet;
   $('navApp').onchange = e => { prefs.navApp = e.target.value; saveLocal(); render(); };
   document.querySelectorAll('.themeBtn').forEach(b => b.onclick = () => { prefs.dark = !isDark(); saveLocal(); render(); });
-  $('startRow').addEventListener('click', openLoad);
+  // Fila de salida: "Marcar salida ahora" guarda la hora al instante; tocar el resto abre notas y hora
+  $('startRow').addEventListener('click', e => {
+    const r = cur();
+    if (e.target.closest('[data-now]')) { r.load = { min: nowMin(), note: '' }; changed(r, { keepOptimized: true }); render(); toast(`Salida marcada a las ${hhmm(r.load.min)}`); return; }
+    openLoad();
+  });
   $('endRow').addEventListener('click', openEnd);
   $('sheetClose').onclick = () => $('sheetView').classList.remove('open');
   $('sheetPrint').onclick = () => window.print();
