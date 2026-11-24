@@ -365,8 +365,14 @@
     let all = (await Promise.all(queries.map(q => safe(photon(q, signal))))).flat();
     if (!all.length) all = (await Promise.all([withNum(ex), bare].map(q => safe(nominatim(q, signal))))).flat();
     const out = [], seen = new Set();
+    // Palabras importantes de la calle escrita (sin "avenida", "calle", "de", "las"...)
+    const STOP = new Set(['avenida', 'av', 'calle', 'pasaje', 'camino', 'de', 'del', 'la', 'las', 'el', 'los', 'y']);
+    const want = norm(bare).split(/\s+/).filter(w => w.length > 1 && !STOP.has(w));
+    const streetScore = st => { if (!want.length || !st) return 1; const h = norm(st); const n = want.filter(w => h.includes(w)).length; return n / want.length; };
     for (const r of all) {
-      const exact = !!r.house && (!num || norm(r.house) === norm(num));
+      const sc = r.street ? streetScore(r.street) : (r.poi ? 1 : streetScore(r.name));
+      if (num && r.street && sc < 1) r.house = '';           // otra calle: su numero no sirve
+      const exact = sc === 1 && !!r.house && (!num || norm(r.house) === norm(num));
       let line = r.street ? r.street + (exact ? ' ' + r.house : (num ? ' ' + num : (r.house ? ' ' + r.house : ''))) : '';
       const place = (r.poi || (r.street && r.name)) && r.name !== r.street ? r.name : '';
       const needAddr = !line && !!place;                  // local sin calle: se completa al elegirlo
@@ -374,10 +380,11 @@
       const key = norm(line + '|' + r.comuna + '|' + place);
       if (!line || seen.has(key)) continue;
       seen.add(key);
-      out.push({ line, place, needAddr, poi: !!place, comuna: r.comuna, lat: r.lat, lng: r.lng, exact: exact || (!num && (!!r.house || !!place)) });
+      out.push({ line, place, needAddr, poi: !!place, sc, comuna: r.comuna, lat: r.lat, lng: r.lng, exact: sc === 1 && (exact || (!num && (!!r.house || !!place))) });
     }
-    // Con numero: primero las direcciones exactas. Sin numero (ej. "mall", "la popular"): primero los locales
-    out.sort((a, b) => num ? (b.exact - a.exact) : (b.poi - a.poi));
+    // Primero la MISMA calle; luego exactas (con numero) o locales (sin numero). Las de otra calle al final.
+    out.sort((a, b) => (b.sc >= 1) - (a.sc >= 1) || (num ? (b.exact - a.exact) : (b.poi - a.poi)) || b.sc - a.sc);
+    if (num && out.some(o => o.sc >= 1)) return out.filter(o => o.sc > 0.5).slice(0, 10);
     return out.slice(0, 10);
   }
 
@@ -520,8 +527,10 @@
     if (c.back && r.stops.length) km += m.dist(prev, c.depot);
     const startM = startMinOf(r);
     const endEst = sm.finish;
-    const endReal = r.endedMin;
-    return { km, startM, endEst, endReal, durMin: (endReal ?? endEst) - startM, sm };
+    const lastDone = Math.max(-1, ...r.stops.filter(s => s.status !== 'pending' && s.doneMin != null).map(s => s.doneMin));
+    const endReal = r.endedMin != null && r.endedMin >= lastDone ? r.endedMin : null;
+    const end = endReal ?? Math.max(endEst, lastDone);
+    return { km, startM, endEst, endReal, durMin: end - startM, sm };
   }
 
   // =====================================================================
@@ -547,6 +556,12 @@
       if (['ruta de la manana', 'ruta de la tarde', 'ruta', 'ruta transferida'].includes(n) || /^ruta \d+$/.test(n) || n === norm(dateName(r.date)) || / \(copia\)$/.test(n)) r.name = '';
     }
     prefs.sampleAdded = true;
+    // Arreglo unico: la Fiambreria quedo guardada en "Avenida Las Torres 1227" (era Pedro Torres 1227)
+    if (!prefs.fixLasTorres) {
+      prefs.fixLasTorres = true;
+      prefs.places = (prefs.places || []).filter(pl => !/las torres 1227/.test(norm(pl.address)));
+      for (const r of Object.values(routes)) for (const st of r.stops) if (/las torres 1227/.test(norm(st.address))) st.precise = false;
+    }
     saveLocal();
   }
   function saveLocal() {
@@ -652,9 +667,12 @@
     : (s.priority || 'normal') !== 'normal' ? 'bg-yellow-400 text-slate-900' : 'bg-blue-600 text-white';
   function navUrl(app, s) {
     const ll = `${s.lat},${s.lng}`, q = encodeURIComponent([s.address, s.comuna, 'Chile'].filter(Boolean).join(', '));
-    if (app === 'waze') return s.precise ? `https://waze.com/ul?ll=${ll}&navigate=yes` : `https://waze.com/ul?q=${q}&navigate=yes`;
-    if (app === 'google') return `https://www.google.com/maps/dir/?api=1&destination=${s.precise ? ll : q}&travelmode=driving`;
-    return `https://maps.apple.com/?daddr=${s.precise ? ll : q}&dirflg=d`;
+    // Se manda la DIRECCION escrita (Waze/Google la ubican mejor que el mapa gratuito).
+    // Solo si Enrique puso el pin a mano en el mapita se mandan las coordenadas exactas.
+    const usePin = !!s.pinManual;
+    if (app === 'waze') return usePin ? `https://waze.com/ul?ll=${ll}&navigate=yes` : `https://waze.com/ul?q=${q}&navigate=yes`;
+    if (app === 'google') return `https://www.google.com/maps/dir/?api=1&destination=${usePin ? ll : q}&travelmode=driving`;
+    return `https://maps.apple.com/?daddr=${usePin ? ll : q}&dirflg=d`;
   }
   function waUrl(s) {
     let p = (s.customerPhone || '').replace(/\D/g, '');
@@ -975,7 +993,7 @@
   }
   function matchPlaces(q) {
     return placesList().filter(pl => tokMatch(q, `${pl.name} ${pl.address} ${pl.comuna}`))
-      .slice(0, 6).map(pl => ({ line: pl.address, place: pl.name, placeName: pl.name, comuna: pl.comuna, lat: pl.lat, lng: pl.lng, exact: true, mine: true }));
+      .slice(0, 6).map(pl => ({ line: pl.address, place: pl.name, placeName: pl.name, comuna: pl.comuna, lat: pl.lat, lng: pl.lng, pinManual: !!pl.pinManual, exact: true, mine: true }));
   }
   // Direcciones usadas antes en cualquier ruta (como Spoke: escribes "741" y sale "Franklin 741")
   function matchHistory(q, skip) {
@@ -986,7 +1004,7 @@
       const key = norm(st.address + '|' + (st.customerName || ''));
       if (seen.has(key) || !tokMatch(q, `${st.customerName || ''} ${st.address} ${st.comuna || ''}`)) continue;
       seen.add(key);
-      out.push({ line: st.address, place: st.customerName || '', placeName: st.customerName || '', comuna: st.comuna, lat: st.lat, lng: st.lng, exact: true, mine: true, hist: true });
+      out.push({ line: st.address, place: st.customerName || '', placeName: st.customerName || '', comuna: st.comuna, lat: st.lat, lng: st.lng, pinManual: !!st.pinManual, exact: true, mine: true, hist: true });
       if (out.length >= 6) return out;
     }
     return out;
@@ -995,7 +1013,7 @@
     if (!name || !st.address || st.lat == null) return;
     const list = placesList(), key = norm(name) + '|' + norm(st.address);
     const old = list.find(pl => norm(pl.name) + '|' + norm(pl.address) === key);
-    const data = { name, address: st.address, comuna: st.comuna || '', lat: st.lat, lng: st.lng, phone: st.customerPhone || '' };
+    const data = { name, address: st.address, comuna: st.comuna || '', lat: st.lat, lng: st.lng, phone: st.customerPhone || '', pinManual: !!st.pinManual };
     if (old) Object.assign(old, data); else list.push({ id: uid(), ...data });
     saveLocal();
   }
@@ -1253,16 +1271,16 @@
       if (!miniMap) {
         miniMap = L.map('fMap', { zoomControl: false, attributionControl: false });
         L.tileLayer(TILE, { maxZoom: 19 }).addTo(miniMap);
-        miniMap.on('click', e => { pick = { lat: e.latlng.lat, lng: e.latlng.lng, precise: true }; pinMarker.setLatLng(e.latlng); });
+        miniMap.on('click', e => { pick = { lat: e.latlng.lat, lng: e.latlng.lng, precise: true, manual: true }; pinMarker.setLatLng(e.latlng); });
       }
       miniMap.setView([pick.lat, pick.lng], 17);
       if (!pinMarker) {
         pinMarker = L.marker([pick.lat, pick.lng], { draggable: true, icon: L.divIcon({ className: '', iconSize: [34, 44], iconAnchor: [17, 42], html: '<svg width="34" height="44" viewBox="0 0 34 44"><path d="M17 1C8 1 1 8 1 17c0 12 16 26 16 26s16-14 16-26C33 8 26 1 17 1z" fill="#dc2626" stroke="#fff" stroke-width="2"/><circle cx="17" cy="17" r="6" fill="#fff"/></svg>' }) }).addTo(miniMap);
-        pinMarker.on('dragend', () => { const ll = pinMarker.getLatLng(); pick = { lat: ll.lat, lng: ll.lng, precise: true }; });
+        pinMarker.on('dragend', () => { const ll = pinMarker.getLatLng(); pick = { lat: ll.lat, lng: ll.lng, precise: true, manual: true }; });
       } else pinMarker.setLatLng([pick.lat, pick.lng]);
       setTimeout(() => miniMap && miniMap.invalidateSize(), 50);
     }
-    wireAddress('f', p => { pick = { lat: p.lat, lng: p.lng, precise: true }; setComunaSelect($('fComuna'), p.comuna); if (!$('fName').value.trim() && p.place) $('fName').value = p.place; showMini(); },
+    wireAddress('f', p => { pick = { lat: p.lat, lng: p.lng, precise: true, manual: !!p.pinManual }; setComunaSelect($('fComuna'), p.comuna); if (!$('fName').value.trim() && p.place) $('fName').value = p.place; showMini(); },
       () => { pick = null; $('fMapBox').classList.add('hidden'); });
     if ((s && s.precise) || prefill) showMini();
     if (!s && !prefill) setTimeout(() => $('fAddr')?.focus(), 80);
@@ -1274,7 +1292,8 @@
       if (pick) ({ lat, lng, precise } = pick);
       else if (comuna && COMUNA[comuna]) { lat = COMUNA[comuna].lat; lng = COMUNA[comuna].lng; precise = false; }
       else { $('fErr').textContent = 'Elige la direcci\u00f3n de la lista, o al menos la comuna.'; $('fErr').classList.remove('hidden'); return; }
-      const data = { address, comuna, lat, lng, precise, notes: $('fNotes').value.trim(), customerName: $('fName').value.trim(), customerPhone: $('fPhone').value.trim(),
+      const pinManual = !!(pick && pick.manual) || (!!s && s.pinManual && !!pick && s.lat === pick.lat && s.lng === pick.lng);
+      const data = { address, comuna, lat, lng, precise, pinManual, notes: $('fNotes').value.trim(), customerName: $('fName').value.trim(), customerPhone: $('fPhone').value.trim(),
         timeWindowStart: $('fWs').value || '', timeWindowEnd: $('fWe').value || '', priority: $('fPri').value, vehiclePosition: $('fPos').value.trim(), packageInfo: $('fPkg').value.trim() };
       if (done) {
         if ($('fPlan').value) data.plannedMin = toMin($('fPlan').value);
@@ -1520,6 +1539,7 @@
         ? { recipient: $('recipient').value.trim(), hasPhoto, hasSig: sigDirty, note: $('note').value.trim(), at: Date.now() }
         : { reason, reasonLabel: REASONS.find(x => x[0] === reason)[1], note: $('note').value.trim(), at: Date.now() };
       if (!r.load) r.load = { min: Math.min(toMin(r.startTime), s.doneMin), note: '' };
+      if (r.endedMin != null && s.doneMin > r.endedMin) r.endedMin = null;
       if (podFile && mode === 'delivered') addPhoto(r, s, podFile).then(() => render()).catch(() => {});
       changed(r, { keepOptimized: true }); closeModal(); ui.activeId = null; render();
       toast(mode === 'delivered' ? 'Entrega guardada' : 'Marcada como no entregada');
@@ -1534,14 +1554,15 @@
     const t = totals(r), units = prefs.units;
     const cell = (real, est) => real == null ? '' : `${hhmm(real)}${est != null ? ` <span class="${devClass(real, est)}">(${devText(real, est)})</span>` : ''}`;
     const rows = [];
-    rows.push({ n: '', addr: fullAddress(r.start), est: toMin(r.startTime), real: r.load ? r.load.min : null, notes: (r.load && r.load.note) || 'Punto de salida' });
+    const st0 = toMin(r.startTime), out0 = r.load ? r.load.min : null;
+    rows.push({ n: '', addr: fullAddress(r.start), est: out0 != null && Math.abs(out0 - st0) > 90 ? out0 : st0, real: out0, notes: (r.load && r.load.note) || 'Punto de salida' });
     r.stops.forEach((s, i) => {
       const est = s.status === 'pending' ? s.etaMin : (s.plannedMin ?? s.etaMin);
       const extra = s.status === 'failed' ? `No entregada: ${s.pod?.reasonLabel || ''}` : '';
       const notes = [s.kind === 'pickup' ? 'Recolecci\u00f3n' : '', s.notes, extra, s.pod?.note, s.photos?.length ? `${s.photos.length} foto${s.photos.length > 1 ? 's' : ''}` : ''].filter(Boolean).join(' \u00b7 ');
       rows.push({ n: i + 1, addr: stopLabel(s), est, real: s.status !== 'pending' ? s.doneMin : null, notes });
     });
-    if (r.returnToStart !== false && r.stops.length) rows.push({ n: '', addr: fullAddress(r.start), est: t.endEst, real: r.endedMin, notes: 'Punto de llegada' });
+    if (r.returnToStart !== false && r.stops.length) rows.push({ n: '', addr: fullAddress(r.start), est: t.endEst, real: t.endReal, notes: 'Punto de llegada' });
     $('printArea').innerHTML = `<div class="sheet-page">
       <h1>${esc(sheetDate(r.date))} - Ruta Enrique</h1>
       <p class="sub">Tiempo total: ${fmtDur(t.durMin)} &nbsp; Distancia total: ${fmtDist(t.km, units)} &nbsp; Paradas: ${r.stops.length}</p>
@@ -1846,7 +1867,7 @@
   const quick = wireAddress('q', p => {
     const r = cur();
     const nid = uid();
-    r.stops.push({ id: nid, status: 'pending', priority: 'normal', kind: 'delivery', address: p.line, comuna: p.comuna, lat: p.lat, lng: p.lng, precise: true, notes: '', customerName: p.place || '' });
+    r.stops.push({ id: nid, status: 'pending', priority: 'normal', kind: 'delivery', address: p.line, comuna: p.comuna, lat: p.lat, lng: p.lng, precise: true, pinManual: !!p.pinManual, notes: '', customerName: p.place || '' });
     $('qAddr').value = ''; changed(r);
     ensureMatrix(r).then(() => { if (curId === r.id) render(); });
     render(); openStopSheet(nid, { focusNotes: true });
