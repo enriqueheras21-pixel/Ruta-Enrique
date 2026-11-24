@@ -195,7 +195,7 @@
   }
   const SERVICE_MIN = 4;                                 // minutos promedio por entrega
   const LATE = 10;                                       // castigo por minuto de atraso al optimizar
-  const APP_VERSION = 'v22';
+  const APP_VERSION = 'v23';
   const LKEY = 'ruta-enrique-v3';                        // misma clave de siempre: no se pierden rutas
   const DEFAULT_BASE = { address: 'Chile Espa\u00f1a 592', comuna: '\u00d1u\u00f1oa', lat: -33.4497, lng: -70.6036, precise: false };
   const NOTE_CHIPS = ['bodega', 'carga de pedido mayorista', 'despacho pedido mayorista', 'llegada estacionamiento', 'dejar en conserjer\u00eda', 'mercado libre env\u00edo'];
@@ -703,7 +703,7 @@
     const r = cur(), t = totals(r), sm = t.sm;
     $('routeDay').textContent = weekday(r.date);
     $('routeTitle').textContent = r.name ? `${r.name} \u00b7 ${dateLabel(r.date)}` : dateObj(r.date).toLocaleDateString('es-CL', { day: 'numeric', month: 'long' });
-    const endTxt = r.endedMin != null ? `Finaliz\u00f3 a las ${hhmm(r.endedMin)}` : `Finaliza a las ${hhmm(t.endEst)}`;
+    const endTxt = t.endReal != null ? `Finaliz\u00f3 a las ${hhmm(t.endReal)}` : `Finaliza a las ${hhmm(t.endEst)}`;
     $('summary').textContent = sm.total ? `${endTxt} \u2022 ${sm.total} parada${sm.total === 1 ? '' : 's'} \u2022 ${fmtDist(t.km)}` : 'Ruta vac\u00eda';
     const info = [];
     if (sm.total && sm.gps) info.push('\ud83d\udccd Ordenada desde tu ubicaci\u00f3n actual');
@@ -832,8 +832,10 @@
     const left = `<div class="min-w-0 shrink-0"><p class="text-2xl font-bold leading-tight text-green-700 dark:text-green-400">${sm.total ? fmtDur(t.durMin) : '\u2014'}</p>
       <p class="text-xs font-semibold text-slate-500">\ud83d\udd52 ${d.getDate()}-${d.toLocaleDateString('es-CL', { month: 'short' }).replace('.', '')}</p></div>`;
     let btn;
-    if (sm.total && !sm.pending && r.endedMin == null) btn = `<button data-f="finish" class="flex h-14 flex-1 items-center justify-center gap-2 rounded-2xl bg-green-600 text-lg font-bold text-white active:scale-[.98]">\ud83c\udfc1 Llegu\u00e9 a la base</button>`;
-    else if (r.endedMin != null) btn = `<button data-f="print" class="flex h-14 flex-1 items-center justify-center gap-2 rounded-2xl bg-slate-900 text-lg font-bold text-white active:scale-[.98] dark:bg-white dark:text-slate-900">\ud83d\udda8 Hoja del d\u00eda</button>`;
+    if (sm.total && !sm.pending && t.endReal == null) btn = `<button data-f="finish" class="flex h-14 flex-1 items-center justify-center gap-2 rounded-2xl bg-green-600 text-lg font-bold text-white active:scale-[.98]">\ud83c\udfc1 Llegu\u00e9 a la base</button>`;
+    // Ruta terminada: aviso discreto y boton chico (la hoja tambien esta arriba), para no tapar la lista
+    else if (t.endReal != null) btn = `<span class="flex-1 text-sm font-semibold text-green-700 dark:text-green-400">\ud83c\udfc1 Ruta terminada</span>
+      <button data-f="print" class="h-10 shrink-0 rounded-xl border border-slate-300 px-3 text-xs font-bold text-slate-600 dark:border-slate-700 dark:text-slate-300">\ud83d\udda8 Hoja</button>`;
     else btn = `<button data-f="upd" ${sm.pending ? '' : 'disabled'} class="flex h-14 shrink-0 flex-col items-center justify-center rounded-2xl border-2 border-slate-300 px-3 text-xs font-bold active:scale-[.98] disabled:opacity-50 dark:border-slate-700"><span class="text-lg leading-none">\u21bb</span>Actualizar</button>
       <button data-f="opt" ${sm.pending < 2 ? 'disabled' : ''} class="flex h-14 flex-1 items-center justify-center gap-2 rounded-2xl bg-blue-600 text-lg font-bold text-white transition active:scale-[.98] disabled:opacity-50">${ICON.sparkle} Optimizar</button>`;
     f.innerHTML = `<div class="flex items-center gap-2">${left}${btn}</div>`;
