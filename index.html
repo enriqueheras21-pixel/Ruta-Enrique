@@ -198,7 +198,7 @@
   }
   const SERVICE_MIN = 4;                                 // minutos promedio por entrega
   const LATE = 10;                                       // castigo por minuto de atraso al optimizar
-  const APP_VERSION = 'v27';
+  const APP_VERSION = 'v28';
   const LKEY = 'ruta-enrique-v3';                        // misma clave de siempre: no se pierden rutas
   const DEFAULT_BASE = { address: 'Chile Espa\u00f1a 592', comuna: '\u00d1u\u00f1oa', lat: -33.4497, lng: -70.6036, precise: false };
   const NOTE_CHIPS = ['bodega', 'carga de pedido mayorista', 'despacho pedido mayorista', 'llegada estacionamiento', 'dejar en conserjer\u00eda', 'mercado libre env\u00edo'];
@@ -1806,17 +1806,19 @@ ${chart.series.map((s, i) => ser(i, s)).join('')}
     const today = dateObj(dayStr(0)), d0 = new Date(today), d1 = new Date(today);
     const fmt = d => d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
     if (kind === 'semana' || kind === 'semanaAnt') { const dow = (today.getDay() + 6) % 7; d0.setDate(today.getDate() - dow); d1.setDate(d0.getDate() + 6); if (kind === 'semanaAnt') { d0.setDate(d0.getDate() - 7); d1.setDate(d1.getDate() - 7); } }
+    if (kind === 'ayer') { d0.setDate(today.getDate() - 1); d1.setDate(today.getDate() - 1); }
     if (kind === 'mes') { d0.setDate(1); d1.setMonth(d1.getMonth() + 1, 0); }
     if (kind === 'mesAnt') { d0.setMonth(d0.getMonth() - 1, 1); d1.setDate(0); }
     return [fmt(d0), fmt(d1)];
   }
-  async function exportPeriod(kind) {
-    const [a, b] = periodRange(kind);
+  async function exportPeriod(kind, range) {
+    const [a, b] = range || periodRange(kind);
+    if (range && a > b) return toast('La fecha "desde" debe ser anterior a "hasta"');
     const list = Object.values(routes).filter(r => r.date >= a && r.date <= b && r.stops.length).sort((x, y) => (x.date || '').localeCompare(y.date || '') || (x.createdAt || 0) - (y.createdAt || 0));
-    const PER = { dia: 'Diario', semana: 'Semanal', semanaAnt: 'Semanal', mes: 'Mensual', mesAnt: 'Mensual' }[kind];
-    if (!list.length) return toast('No hay rutas con paradas en ese per\u00edodo');
+    const PER = range ? (a === b ? 'Diario' : 'Periodo') : { dia: 'Diario', ayer: 'Diario', semana: 'Semanal', semanaAnt: 'Semanal', mes: 'Mensual', mesAnt: 'Mensual' }[kind];
+    if (!list.length) return toast(a === b ? 'No hay rutas con paradas el ' + sheetDate(a) : 'No hay rutas con paradas en ese per\u00edodo');
     const fd = s => dateObj(s).toLocaleDateString('es-CL', { day: 'numeric', month: 'short', year: 'numeric' }).replace(/\./g, '');
-    const rango = kind === 'dia' ? sheetDate(a) : `del ${fd(a)} al ${fd(b)}`;
+    const rango = a === b ? sheetDate(a) : `del ${fd(a)} al ${fd(b)}`;
     const blob = buildReport(list, PER, rango);
     await shareBlob(blob, `informe-${PER.toLowerCase()}-${a}${a !== b ? '_al_' + b : ''}.xlsx`);
   }
@@ -1835,18 +1837,36 @@ ${chart.series.map((s, i) => ser(i, s)).join('')}
   }
   // Ventana de informes: Diario / Semanal / Mensual
   function openReports(afterFinish) {
+    const hoy = dayStr(0);
+    const diasCon = [...new Set(Object.values(routes).filter(r => r.stops.length && r.date && r.date <= hoy).map(r => r.date))].sort().reverse().slice(0, 8);
+    const chip = d => d === hoy ? 'Hoy' : d === dayStr(-1) ? 'Ayer' : dateObj(d).toLocaleDateString('es-CL', { weekday: 'short', day: 'numeric', month: 'short' }).replace(/\./g, '');
     const B = 'flex h-14 w-full items-center gap-3 rounded-xl border-2 border-slate-200 px-4 text-left font-bold dark:border-slate-700';
     sheet(`${head(afterFinish ? '\ud83c\udfc1 Ruta terminada' : '\ud83d\udcca Informes en Excel')}
       ${afterFinish ? '<p class="-mt-2 mb-3 text-sm text-slate-600 dark:text-slate-400">\u00bfQuieres generar el informe del d\u00eda?</p>' : '<p class="-mt-2 mb-3 text-sm text-slate-600 dark:text-slate-400">Km, horas, combustible, paradas y gr\u00e1fico de barras.</p>'}
       <div class="space-y-2">
-        <button data-rep="dia" class="${B} ${afterFinish ? 'border-blue-600 bg-blue-600 text-white' : ''}">\ud83d\udcc5 Informe diario <span class="ml-auto text-xs font-semibold opacity-70">hoy</span></button>
+        <div class="grid grid-cols-2 gap-2">
+          <button data-rep="dia" class="${B} ${afterFinish ? 'border-blue-600 bg-blue-600 text-white' : ''}">\ud83d\udcc5 Hoy</button>
+          <button data-rep="ayer" class="${B}">\u23ea Ayer</button></div>
         <button data-rep="semana" class="${B}">\ud83d\uddd3 Informe semanal <span class="ml-auto text-xs font-semibold opacity-70">esta semana</span></button>
         <button data-rep="mes" class="${B}">\ud83d\udcc6 Informe mensual <span class="ml-auto text-xs font-semibold opacity-70">este mes</span></button>
         <div class="grid grid-cols-2 gap-2 pt-1">
           <button data-rep="semanaAnt" class="h-11 rounded-xl border border-slate-300 text-sm font-semibold dark:border-slate-700">Semana pasada</button>
           <button data-rep="mesAnt" class="h-11 rounded-xl border border-slate-300 text-sm font-semibold dark:border-slate-700">Mes pasado</button></div>
+      </div>
+      <div class="mt-4 rounded-xl border-2 border-slate-200 p-3 dark:border-slate-700">
+        <p class="mb-2 font-bold">\ud83d\udccc Elegir un d\u00eda</p>
+        ${diasCon.length ? `<div class="mb-2 flex flex-wrap gap-2">${diasCon.map(d => `<button data-dia="${d}" class="h-9 rounded-full border border-blue-600 px-3 text-sm font-semibold text-blue-700 dark:text-blue-300">${chip(d)}</button>`).join('')}</div>` : ''}
+        <div class="flex gap-2"><input id="repDia" type="date" max="${hoy}" value="${diasCon[0] || hoy}" class="h-11 min-w-0 flex-1 rounded-xl border border-slate-300 px-3 dark:border-slate-700 dark:bg-slate-800">
+          <button id="repDiaGo" class="h-11 rounded-xl bg-blue-600 px-4 font-bold text-white">Generar</button></div>
+        <p class="mb-2 mt-4 font-bold">\ud83d\udcd0 Elegir desde / hasta</p>
+        <div class="grid grid-cols-2 gap-2"><label class="text-xs font-semibold text-slate-500">Desde<input id="repDesde" type="date" max="${hoy}" value="${hoy.slice(0, 8)}01" class="mt-1 h-11 w-full rounded-xl border border-slate-300 px-2 dark:border-slate-700 dark:bg-slate-800"></label>
+          <label class="text-xs font-semibold text-slate-500">Hasta<input id="repHasta" type="date" max="${hoy}" value="${hoy}" class="mt-1 h-11 w-full rounded-xl border border-slate-300 px-2 dark:border-slate-700 dark:bg-slate-800"></label></div>
+        <button id="repRangoGo" class="mt-2 h-11 w-full rounded-xl border-2 border-blue-600 font-bold text-blue-700 dark:text-blue-300">Generar informe de ese per\u00edodo</button>
       </div>`);
     document.querySelectorAll('[data-rep]').forEach(b => b.onclick = () => { closeModal(); exportPeriod(b.dataset.rep); });
+    document.querySelectorAll('[data-dia]').forEach(b => b.onclick = () => { closeModal(); exportPeriod(null, [b.dataset.dia, b.dataset.dia]); });
+    $('repDiaGo').onclick = () => { const d = $('repDia').value; if (!d) return toast('Elige un d\u00eda'); closeModal(); exportPeriod(null, [d, d]); };
+    $('repRangoGo').onclick = () => { const a = $('repDesde').value, b = $('repHasta').value; if (!a || !b) return toast('Elige las dos fechas'); if (a > b) return toast('"Desde" debe ser antes de "Hasta"'); closeModal(); exportPeriod(null, [a, b]); };
   }
   window.__buildXlsx = (r, kind) => kind ? buildReport(Object.values(routes).filter(x => { const [a, b] = periodRange(kind); return x.date >= a && x.date <= b && x.stops.length; }), {dia:'Diario',semana:'Semanal',mes:'Mensual'}[kind], kind) : buildReport([r || cur()], 'Diario', 'prueba');   // (para pruebas)
 
