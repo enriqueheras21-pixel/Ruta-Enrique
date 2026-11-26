@@ -201,7 +201,7 @@
   }
   const SERVICE_MIN = 4;                                 // minutos promedio por entrega
   const LATE = 10;                                       // castigo por minuto de atraso al optimizar
-  const APP_VERSION = 'v38';
+  const APP_VERSION = 'v39';
   const LKEY = 'ruta-enrique-v3';                        // misma clave de siempre: no se pierden rutas
   const DEFAULT_BASE = { address: 'Chile Espa\u00f1a 592', comuna: '\u00d1u\u00f1oa', lat: -33.4497, lng: -70.6036, precise: false };
   const NOTE_CHIPS = ['bodega', 'carga de pedido mayorista', 'despacho pedido mayorista', 'llegada estacionamiento', 'dejar en conserjer\u00eda', 'mercado libre env\u00edo'];
@@ -884,42 +884,55 @@
   // En la lista: deslizar hacia arriba primero sube el panel hasta arriba y recien ahi hace scroll;
   // deslizar hacia abajo estando al comienzo de la lista baja el panel.
   function wireSheetDrag(el, { isList = false, tapToggle = false } = {}) {
-    let y0 = null, h0 = 0, H = 1, moved = 0, lastY = 0, lastT = 0, vel = 0, dragging = false, raf = 0;
+    let y0 = null, h0 = 0, H = 1, moved = 0, lastY = 0, lastT = 0, vel = 0, dragging = false, raf = 0, hist = [], startF = 0, st0 = 0;
     const apply = () => { raf = 0; const f = Math.min(0.95, Math.max(0.3, (h0 - (lastY - y0)) / H)); $('viewRoute').style.setProperty('--sheetH', (f * 100).toFixed(1) + '%'); };
     el.addEventListener('touchstart', e => {
       if (!isMobile() || e.touches.length > 1) return;
       if (!isList && e.target.closest('select,textarea')) return;   // botones y buscador tambien sirven para arrastrar
-      y0 = lastY = e.touches[0].clientY; lastT = performance.now(); vel = 0; moved = 0;
-      H = $('viewRoute').clientHeight; h0 = $('panel').offsetHeight; dragging = !isList;
+      y0 = lastY = e.touches[0].clientY; lastT = performance.now(); vel = 0; moved = 0; hist = [[lastT, lastY]];
+      H = $('viewRoute').clientHeight; h0 = $('panel').offsetHeight; dragging = !isList; startF = h0 / H; st0 = el.scrollTop;
       if (dragging) $('panel').style.transition = 'none';
     }, { passive: true });
     el.addEventListener('touchmove', e => {
       if (y0 == null) return;
       const y = e.touches[0].clientY, now = performance.now();
-      vel = (y - lastY) / Math.max(1, now - lastT); lastY = y; lastT = now; moved = Math.max(moved, Math.abs(y - y0));
+      lastY = y; lastT = now; moved = Math.max(moved, Math.abs(y - y0));
+      hist.push([now, y]); while (hist.length > 2 && now - hist[0][0] > 120) hist.shift();   // velocidad promedio de los ultimos ~120 ms (no solo el ultimo movimiento)
       if (isList && !dragging) {
         const full = h0 / H >= SNAP[2] - 0.03, dy = y - y0;
-        if (Math.abs(dy) < 6) return;
-        if ((dy < 0 && !full) || (dy > 0 && el.scrollTop <= 0)) { dragging = true; y0 = y; h0 = $('panel').offsetHeight; $('panel').style.transition = 'none'; }
+        if (Math.abs(dy) < (dy > 0 ? 16 : 6)) return;
+        if ((dy < 0 && !full) || (dy > 0 && el.scrollTop <= 0 && st0 <= 0)) { dragging = true; y0 = y; h0 = $('panel').offsetHeight; $('panel').style.transition = 'none'; }
         else { y0 = null; return; }                        // scroll normal de la lista
       }
       if (!isList && moved < 8) return;                 // un toque normal (tocar el buscador o un boton) sigue funcionando
       if (e.cancelable) e.preventDefault();
-      if (document.activeElement === $('qAddr') && !isList) $('qAddr').blur();
+      if (document.activeElement === $('qAddr')) { ui.preSearch = 0; $('qAddr').blur(); }   // al arrastrar no se vuelve a la altura anterior
       if (!raf) raf = requestAnimationFrame(apply);
     }, { passive: false });
     const end = () => {
       if (y0 == null) return;
+      const fEnd = Math.min(0.95, Math.max(0.3, (h0 - (lastY - y0)) / H));   // posicion real del dedo (no esperar al dibujo)
+      if (raf) { cancelAnimationFrame(raf); raf = 0; }
       y0 = null;
       if (!dragging) return;
       dragging = false;
       $('panel').style.transition = '';
-      const f = $('panel').offsetHeight / H;
+      const f = moved < 8 ? $('panel').offsetHeight / H : fEnd;
       if (moved < 8) { if (tapToggle) setSheet(f < 0.45 ? SNAP[1] : (f > 0.8 ? SNAP[1] : SNAP[2])); return; }
+      ui.preSearch = 0;
+      const a = hist[0], b = hist[hist.length - 1]; vel = b && a && b[0] > a[0] ? (b[1] - a[1]) / (b[0] - a[0]) : 0;
+      const dir = Math.sign(fEnd * H - h0) * -1;   // -1 = el panel subi\u00f3, +1 = baj\u00f3 (en todo el gesto)
       let target;
-      if (vel < -0.4) target = SNAP.find(x => x > f + 0.02) ?? SNAP[2];          // empujon hacia arriba
-      else if (vel > 0.4) target = [...SNAP].reverse().find(x => x < f - 0.02) ?? SNAP[0];   // hacia abajo
-      else target = SNAP.reduce((a, b) => Math.abs(b - f) < Math.abs(a - f) ? b : a);
+      const startSnap = SNAP.reduce((p, q) => Math.abs(q - startF) < Math.abs(p - startF) ? q : p);
+      if (Math.abs(fEnd - startF) < 0.1 && Math.abs(vel) < 0.6) target = startSnap;   // movimiento chico o accidental: vuelve a donde estaba
+      else if (vel < -0.5) target = SNAP.find(x => x > f + 0.02) ?? SNAP[2];          // empujon rapido hacia arriba
+      else if (vel > 0.5) target = [...SNAP].reverse().find(x => x < f - 0.02) ?? SNAP[0];   // empujon rapido hacia abajo
+      else {   // soltado despacio: queda en la posicion mas cercana, favoreciendo la direccion en que lo movio
+        const near = SNAP.reduce((p, q) => Math.abs(q - f) < Math.abs(p - f) ? q : p);
+        target = near;
+        if (dir < 0 && near < f - 0.04) target = SNAP.find(x => x >= f - 0.04) ?? SNAP[2];
+        if (dir > 0 && near > f + 0.04) target = [...SNAP].reverse().find(x => x <= f + 0.04) ?? SNAP[0];
+      }
       setSheet(target);
     };
     el.addEventListener('touchend', end); el.addEventListener('touchcancel', end);
