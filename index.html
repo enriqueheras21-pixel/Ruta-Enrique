@@ -199,7 +199,7 @@
   }
   const SERVICE_MIN = 4;                                 // minutos promedio por entrega
   const LATE = 10;                                       // castigo por minuto de atraso al optimizar
-  const APP_VERSION = 'v30';
+  const APP_VERSION = 'v31';
   const LKEY = 'ruta-enrique-v3';                        // misma clave de siempre: no se pierden rutas
   const DEFAULT_BASE = { address: 'Chile Espa\u00f1a 592', comuna: '\u00d1u\u00f1oa', lat: -33.4497, lng: -70.6036, precise: false };
   const NOTE_CHIPS = ['bodega', 'carga de pedido mayorista', 'despacho pedido mayorista', 'llegada estacionamiento', 'dejar en conserjer\u00eda', 'mercado libre env\u00edo'];
@@ -1710,7 +1710,7 @@
     return new Blob([...parts, ...central, new Uint8Array(e.buffer)], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
   }
   const xe = v => String(v ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])).replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g, '');
-  const colL = n => String.fromCharCode(64 + n);
+  const colL = n => { let t = ''; while (n > 0) { const m = (n - 1) % 26; t = String.fromCharCode(65 + m) + t; n = Math.floor((n - 1) / 26); } return t; };
   // ---- Datos de una ruta para los informes ----
   function routeData(r) {
     const t = totals(r), m = M(r), dep = depotOf(r);
@@ -1758,6 +1758,12 @@
         if (o.end != null) sum.push(['Od\u00f3metro final (km)', N(2, o.end, Number.isInteger(o.end) ? 9 : 7), S(3, o.endMin != null ? 'a las ' + hhmm(o.endMin) : '')]);
       }
     }
+    if (!multiDay) {
+      let lg = null;
+      D.forEach(d => { let prevName = 'la base'; d.stops.forEach(x => { if (!lg || x.tramo > lg.km) lg = { km: x.tramo, txt: `de ${prevName} a ${x.n}. ${x.name}` }; prevName = `${x.n}. ${x.name}`; });
+        if (d.backKm && (!lg || d.backKm > lg.km)) lg = { km: d.backKm, txt: `de ${prevName} de regreso a la base` }; });
+      if (lg) sum.push(['Tramo m\u00e1s largo (km)', N(2, +lg.km.toFixed(1), 7), S(3, lg.txt)]);
+    }
     if (odoDays.length) sum.push(['Km reales seg\u00fan od\u00f3metro', N(2, +odoTot.toFixed(1), 7), S(3, (multiDay ? `${odoDays.length} de ${dates.length} d\u00edas con lectura \u00b7 ` : '') + `la app calcul\u00f3 ${fmtKm(+km.toFixed(1))} km`)]);
     if (!multiDay && D.length === 1) {
       const t = D[0].t, r = D[0].r;
@@ -1785,10 +1791,18 @@
       let acc = 0; st.forEach(x => { acc += x.tramo; x.acc = acc; });
       rows.push([H, ['Parada', 'Km tramo', 'Km acumulado'].map((h, j) => S(j + 1, h, 3))]);
       st.forEach((x, i) => rows.push([first + i, [S(1, x.label, 4), N(2, +x.tramo.toFixed(1)), N(3, +x.acc.toFixed(1))]]));
-      chart = { H, first, title: `Kil\u00f3metros del d\u00eda \u00b7 Total: ${km.toFixed(1).replace('.', ',')} km`, catCol: 'A', cats: st.map(x => x.label.slice(0, 24)),
-        series: [{ col: 'B', title: 'Km tramo (desde la parada anterior)', vals: st.map(x => +x.tramo.toFixed(1)), color: '1A73E8' }, { col: 'C', title: 'Km acumulado (total que llevas)', vals: st.map(x => +x.acc.toFixed(1)), color: '16A34A' }] };
+      // Datos de la gr\u00e1fica (a la derecha, columnas L en adelante): 3 barras -> tramos apilados, total km, horas
+      const PAL = ['1A73E8', 'F59E0B', 'EF4444', '8B5CF6', '06B6D4', 'EC4899', '84CC16', 'F97316', '0EA5E9', 'A855F7', '14B8A6', 'EAB308'];
+      const C0 = 12, hrs = +(min / 60).toFixed(1), cats = ['Recorrido por tramos (km)', 'Total del d\u00eda (km)', 'Tiempo total (horas)'];
+      const ser = [...st.map((x, i) => ({ title: x.label.slice(0, 30), vals: [+x.tramo.toFixed(1), null, null], color: PAL[i % PAL.length] })),
+        { title: 'Total km', vals: [null, +km.toFixed(1), null], color: '16A34A' }, { title: 'Horas', vals: [null, null, hrs], color: '475569' }];
+      const put = (rn, cs) => { const row = rows.find(x => x[0] === rn); if (row) row[1].push(...cs); else rows.push([rn, cs]); };
+      put(H, [S(C0, 'Datos gr\u00e1fica', 3), ...ser.map((x, j) => S(C0 + 1 + j, x.title, 3))]);
+      cats.forEach((c, i) => put(first + i, [S(C0, c, 4), ...ser.flatMap((x, j) => x.vals[i] == null ? [] : [N(C0 + 1 + j, x.vals[i])])]));
+      chart = { H, first, stacked: true, yTitle: 'km  /  horas', title: `Total: ${km.toFixed(1).replace('.', ',')} km en ${fmtDur(min)}`, catCol: colL(C0), cats,
+        series: ser.map((x, j) => ({ ...x, col: colL(C0 + 1 + j) })) };
     }
-    const anchorRow = first + chart.cats.length + 2;
+    const anchorRow = first + Math.max(chart.cats.length, rows.filter(x => x[0] >= first).length) + 2;
     // ===== Hoja 2: Detalle de paradas =====
     const rows2 = [];
     rows2.push([1, [S(1, `Detalle de paradas \u00b7 ${rango}`, 1)]]);
@@ -1808,7 +1822,7 @@
 <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
 <sheetPr><pageSetUpPr fitToPage="1"/></sheetPr>
 <sheetViews><sheetView workbookViewId="0" zoomScale="100"/></sheetViews>
-<cols>${cols.map((w, i) => `<col min="${i + 1}" max="${i + 1}" width="${w}" customWidth="1"/>`).join('')}</cols>
+<cols>${cols.map((w, i) => `<col min="${i + 1}" max="${i + 1}" width="${w}" customWidth="1"/>`).join('')}${withDrawing ? '<col min="12" max="120" width="12" hidden="1" customWidth="1"/>' : ''}</cols>
 <sheetData>${rws.map(([rn, cs]) => `<row r="${rn}"${cs.some(c => c[3] === 3) ? ' ht="30" customHeight="1"' : (rn > 2 ? ' ht="18" customHeight="1"' : '')}>${cs.map(c => cell(rn, c)).join('')}</row>`).join('')}</sheetData>
 <pageMargins left="0.4" right="0.4" top="0.5" bottom="0.5" header="0.3" footer="0.3"/>
 <pageSetup paperSize="1" orientation="landscape" fitToWidth="1" fitToHeight="0"/>
@@ -1817,7 +1831,7 @@ ${withDrawing ? '<drawing r:id="rId1"/>' : ''}</worksheet>`; };
     const sheet2 = sheetXml(rows2 || [], [16, 5, 30, 40, 10, 12, 11, 10, 13, 34], false);
     const n = Math.max(1, chart.cats.length);
     const cache = (vals, num) => num
-      ? `<c:numCache><c:formatCode>0.0</c:formatCode><c:ptCount val="${vals.length}"/>${vals.map((v, i) => `<c:pt idx="${i}"><c:v>${v}</c:v></c:pt>`).join('')}</c:numCache>`
+      ? `<c:numCache><c:formatCode>0.0</c:formatCode><c:ptCount val="${vals.length}"/>${vals.map((v, i) => v == null ? '' : `<c:pt idx="${i}"><c:v>${v}</c:v></c:pt>`).join('')}</c:numCache>`
       : `<c:strCache><c:ptCount val="${vals.length}"/>${vals.map((v, i) => `<c:pt idx="${i}"><c:v>${xe(v)}</c:v></c:pt>`).join('')}</c:strCache>`;
     const ser = (idx, s) => `<c:ser><c:idx val="${idx}"/><c:order val="${idx}"/><c:tx><c:strRef><c:f>Resumen!$${s.col}$${chart.H}</c:f><c:strCache><c:ptCount val="1"/><c:pt idx="0"><c:v>${xe(s.title)}</c:v></c:pt></c:strCache></c:strRef></c:tx>
       <c:spPr><a:solidFill><a:srgbClr val="${s.color}"/></a:solidFill></c:spPr><c:invertIfNegative val="0"/>
@@ -1827,15 +1841,15 @@ ${withDrawing ? '<drawing r:id="rId1"/>' : ''}</worksheet>`; };
     const chartXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
 <c:roundedCorners val="0"/><c:chart><c:title><c:tx><c:rich><a:bodyPr/><a:p><a:pPr><a:defRPr sz="1400" b="1"/></a:pPr><a:r><a:t>${xe(chart.title)}</a:t></a:r></a:p></c:rich></c:tx><c:overlay val="0"/></c:title>
-<c:autoTitleDeleted val="0"/><c:plotArea><c:layout/><c:barChart><c:barDir val="col"/><c:grouping val="clustered"/><c:varyColors val="0"/>
+<c:autoTitleDeleted val="0"/><c:plotArea><c:layout/><c:barChart><c:barDir val="col"/><c:grouping val="${chart.stacked ? 'stacked' : 'clustered'}"/><c:varyColors val="0"/>
 ${chart.series.map((s, i) => ser(i, s)).join('')}
-<c:gapWidth val="80"/><c:axId val="10"/><c:axId val="100"/></c:barChart>
+<c:gapWidth val="${chart.stacked ? 50 : 80}"/>${chart.stacked ? '<c:overlap val="100"/>' : ''}<c:axId val="10"/><c:axId val="100"/></c:barChart>
 <c:catAx><c:axId val="10"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="0"/><c:axPos val="b"/><c:numFmt formatCode="General" sourceLinked="0"/><c:majorTickMark val="none"/><c:minorTickMark val="none"/><c:tickLblPos val="nextTo"/><c:crossAx val="100"/><c:crosses val="autoZero"/><c:auto val="1"/><c:lblAlgn val="ctr"/><c:lblOffset val="100"/><c:noMultiLvlLbl val="0"/></c:catAx>
-<c:valAx><c:axId val="100"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="0"/><c:axPos val="l"/><c:majorGridlines/><c:title><c:tx><c:rich><a:bodyPr/><a:p><a:r><a:t>km</a:t></a:r></a:p></c:rich></c:tx><c:overlay val="0"/></c:title><c:numFmt formatCode="0" sourceLinked="0"/><c:majorTickMark val="none"/><c:minorTickMark val="none"/><c:tickLblPos val="nextTo"/><c:crossAx val="10"/><c:crosses val="autoZero"/><c:crossBetween val="between"/></c:valAx>
-</c:plotArea><c:legend><c:legendPos val="b"/><c:overlay val="0"/></c:legend><c:plotVisOnly val="1"/><c:dispBlanksAs val="gap"/></c:chart></c:chartSpace>`;
+<c:valAx><c:axId val="100"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="0"/><c:axPos val="l"/><c:majorGridlines/><c:title><c:tx><c:rich><a:bodyPr/><a:p><a:r><a:t>${xe(chart.yTitle || 'km')}</a:t></a:r></a:p></c:rich></c:tx><c:overlay val="0"/></c:title><c:numFmt formatCode="0" sourceLinked="0"/><c:majorTickMark val="none"/><c:minorTickMark val="none"/><c:tickLblPos val="nextTo"/><c:crossAx val="10"/><c:crosses val="autoZero"/><c:crossBetween val="between"/></c:valAx>
+</c:plotArea><c:legend><c:legendPos val="b"/><c:overlay val="0"/></c:legend><c:plotVisOnly val="0"/><c:dispBlanksAs val="gap"/></c:chart></c:chartSpace>`;
     const drawing = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
-<xdr:twoCellAnchor><xdr:from><xdr:col>0</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>${anchorRow}</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from><xdr:to><xdr:col>7</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>${anchorRow + 20}</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:to>
+<xdr:twoCellAnchor><xdr:from><xdr:col>0</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>${anchorRow}</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from><xdr:to><xdr:col>7</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>${anchorRow + (chart.stacked ? 26 : 20)}</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:to>
 <xdr:graphicFrame macro=""><xdr:nvGraphicFramePr><xdr:cNvPr id="2" name="Grafico 1"/><xdr:cNvGraphicFramePr/></xdr:nvGraphicFramePr><xdr:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/></xdr:xfrm>
 <a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/chart"><c:chart xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:id="rId1"/></a:graphicData></a:graphic></xdr:graphicFrame><xdr:clientData/></xdr:twoCellAnchor></xdr:wsDr>`;
     const chart_ = chartXml;
