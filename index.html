@@ -204,7 +204,7 @@
   const svcOf = r => r.svcMin ?? prefs.svcMin ?? SERVICE_MIN;   // minutos por parada: de esta ruta, o el que Enrique dej\u00f3 por defecto
   const svcStop = (s, c) => (s.svcMin != null && s.svcMin !== '' ? +s.svcMin : c.svc);
   const LATE = 10;                                       // castigo por minuto de atraso al optimizar
-  const APP_VERSION = 'v41';
+  const APP_VERSION = 'v42';
   const LKEY = 'ruta-enrique-v3';                        // misma clave de siempre: no se pierden rutas
   const DEFAULT_BASE = { address: 'Chile Espa\u00f1a 592', comuna: '\u00d1u\u00f1oa', lat: -33.4497, lng: -70.6036, precise: false };
   const NOTE_CHIPS = ['bodega', 'carga de pedido mayorista', 'despacho pedido mayorista', 'llegada estacionamiento', 'dejar en conserjer\u00eda', 'mercado libre env\u00edo'];
@@ -2005,11 +2005,14 @@
     } else {
       const st = D.flatMap(d => [...d.stops.map(x => ({ label: `${D.length > 1 ? `R${routeNum(d.r)}-` : ''}${x.n}. ${x.name}`, tramo: x.tramo })),
         ...(d.backKm ? [{ label: `${D.length > 1 ? `R${routeNum(d.r)} ` : ''}\u21a9 Regreso a la base`, tramo: d.backKm }] : [])]);
-      let acc = 0; st.forEach(x => { acc += x.tramo; x.acc = acc; });
-      rows.push([H, ['Parada', 'Km tramo', 'Km acumulado'].map((h, j) => S(j + 1, h, 3))]);
-      st.forEach((x, i) => rows.push([first + i, [S(1, x.label, 4), N(2, +x.tramo.toFixed(1)), N(3, +x.acc.toFixed(1))]]));
+      // Si hay km oficiales del od\u00f3metro, los tramos se ajustan en proporci\u00f3n para que sumen lo mismo que el od\u00f3metro
+      const sumApp = st.reduce((a, x) => a + x.tramo, 0), fx = usaOdo && sumApp > 0 ? kmReal / sumApp : 1;
+      let acc = 0; st.forEach(x => { x.app = x.tramo; x.tramo = x.tramo * fx; acc += x.tramo; x.acc = acc; });
+      rows.push([H, ['Parada', fx !== 1 ? 'Km tramo (ajustado)' : 'Km tramo', 'Km acumulado', ...(fx !== 1 ? ['Km calculado app'] : [])].map((h, j) => S(j + 1, h, 3))]);
+      st.forEach((x, i) => rows.push([first + i, [S(1, x.label, 4), N(2, +x.tramo.toFixed(1)), N(3, +x.acc.toFixed(1)), ...(fx !== 1 ? [N(4, +x.app.toFixed(1))] : [])]]));
+      if (fx !== 1) rows.push([first + st.length, [S(1, `Tramos ajustados al od\u00f3metro oficial (${fmtKm(+kmReal.toFixed(1))} km). La app hab\u00eda calculado ${fmtKm(+sumApp.toFixed(1))} km.`, 0)]]);
       const sn = t => String(t || '').replace(/^(avenida|avda\.?|av\.?)\s+/i, '').slice(0, 18);
-      const legs = []; D.forEach(d => { let pv = 'Bodega'; d.stops.forEach(x => { legs.push({ t: `${pv} \u2013 ${sn(x.name)}`, km: x.tramo }); pv = sn(x.name); }); if (d.backKm) legs.push({ t: `${pv} \u2013 Bodega`, km: d.backKm }); });
+      const legs = []; D.forEach(d => { let pv = 'Bodega'; d.stops.forEach(x => { legs.push({ t: `${pv} \u2013 ${sn(x.name)}`, km: x.tramo * fx }); pv = sn(x.name); }); if (d.backKm) legs.push({ t: `${pv} \u2013 Bodega`, km: d.backKm * fx }); });
       chart = mk3(legs, 'Recorrido por tramos');
     }
     const anchorRow = first + rows.filter(x => x[0] >= first).length + 2;
