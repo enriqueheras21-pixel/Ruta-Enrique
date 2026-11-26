@@ -199,7 +199,7 @@
   }
   const SERVICE_MIN = 4;                                 // minutos promedio por entrega
   const LATE = 10;                                       // castigo por minuto de atraso al optimizar
-  const APP_VERSION = 'v32';
+  const APP_VERSION = 'v33';
   const LKEY = 'ruta-enrique-v3';                        // misma clave de siempre: no se pierden rutas
   const DEFAULT_BASE = { address: 'Chile Espa\u00f1a 592', comuna: '\u00d1u\u00f1oa', lat: -33.4497, lng: -70.6036, precise: false };
   const NOTE_CHIPS = ['bodega', 'carga de pedido mayorista', 'despacho pedido mayorista', 'llegada estacionamiento', 'dejar en conserjer\u00eda', 'mercado libre env\u00edo'];
@@ -1731,7 +1731,13 @@
   function buildReport(list, periodo, rango) {
     const D = list.map(routeData);
     const multiDay = periodo !== 'Diario';
-    const km = D.reduce((a, d) => a + d.km, 0), min = D.reduce((a, d) => a + d.min, 0), fuel = fuelOf(km);
+    const km = D.reduce((a, d) => a + d.km, 0), min = D.reduce((a, d) => a + d.min, 0);
+    const dates = [...new Set(D.map(d => d.r.date))].sort();
+    const dayKmApp = k => D.filter(d => d.r.date === k).reduce((a, d) => a + d.km, 0);
+    const dayKm = k => odoKm(k) ?? dayKmApp(k);                       // km reales (od\u00f3metro) si los anot\u00f3; si no, los calculados
+    const odoDays = dates.filter(k => odoKm(k) != null), odoTot = odoDays.reduce((a, k) => a + odoKm(k), 0);
+    const kmReal = dates.reduce((a, k) => a + dayKm(k), 0), usaOdo = odoDays.length > 0;
+    const fuel = fuelOf(kmReal);
     const nStops = D.reduce((a, d) => a + d.stops.length, 0), ok = D.reduce((a, d) => a + d.ok, 0), ko = D.reduce((a, d) => a + d.ko, 0);
     let far = null;
     D.forEach(d => d.stops.forEach(x => { if (!far || x.base > far.base) far = { ...x, label: d.label }; }));
@@ -1741,15 +1747,13 @@
     rows.push([1, [S(1, `Informe ${periodo.toLowerCase()} de rutas \u00b7 Ruta Enrique`, 1)]]);
     rows.push([2, [S(1, `${rango} \u00b7 Base: ${fullAddress(prefs.base)}`)]]);
     const sum = [
-      ['Distancia total (km)', N(2, +km.toFixed(1), 7), S(3, D.length > 1 ? `${D.length} rutas` : '1 ruta')],
+      ['Distancia total (km)', N(2, +kmReal.toFixed(1), 7), S(3, (D.length > 1 ? `${D.length} rutas` : '1 ruta') + (usaOdo ? ` \u00b7 real seg\u00fan od\u00f3metro${odoDays.length < dates.length ? ' (d\u00edas sin lectura: calculado)' : ''} \u00b7 la app calcul\u00f3 ${fmtKm(+km.toFixed(1))} km` : ' \u00b7 calculado por la app'))],
       ['Tiempo total (horas)', N(2, +(min / 60).toFixed(2), 7), S(3, fmtDur(min))],
       ['N\u00famero de paradas', N(2, nStops, 9), S(3, `${ok} entregadas \u00b7 ${ko} no entregadas \u00b7 ${nStops - ok - ko} pendientes`)],
       ['Parada m\u00e1s lejana (km desde la base)', N(2, far ? +far.base.toFixed(1) : 0, 7), S(3, far ? `${far.name} (${far.label})` : '')],
-      ['Combustible aprox. (litros)', N(2, +fuel.litros.toFixed(1), 7), S(3, `rendimiento ${prefs.kmPorLitro} km/L`)],
+      ['Combustible aprox. (litros)', N(2, +fuel.litros.toFixed(1), 7), S(3, `rendimiento ${prefs.kmPorLitro} km/L sobre ${fmtKm(+kmReal.toFixed(1))} km${usaOdo ? ' reales' : ''}`)],
       ['Gasto aprox. en combustible ($)', N(2, Math.round(fuel.pesos), 6), S(3, `a $${(prefs.precioLitro || 0).toLocaleString('es-CL')} por litro`)],
     ];
-    const dates = [...new Set(D.map(d => d.r.date))].sort();
-    const odoDays = dates.filter(k => odoKm(k) != null), odoTot = odoDays.reduce((a, k) => a + odoKm(k), 0);
     if (!multiDay) {
       const o = (prefs.odo || {})[dates[0]];
       if (o && o.start != null) {
@@ -1773,6 +1777,17 @@
     sum.forEach((x, i) => rows.push([4 + i, [S(1, x[0], 2), ...x.slice(1)]]));
     const H = 4 + sum.length + 1, first = H + 1;
     let chart;
+    // Gr\u00e1fica de 3 barras: 1) recorrido acumulado (bloques de colores uno sobre otro), 2) horas totales, 3) gasolina (litros)
+    const mk3 = (parts, cat1) => {
+      const PAL = ['7E63A6', '3A9A82', '4A8FC6', 'E8A33D', 'E06C50', 'D45D93', '84A93B', '5B6CCB', '2BA3B8', 'B5794A', '9C5BB8', 'C9A227'];
+      const hrs = +(min / 60).toFixed(1), lts = +fuel.litros.toFixed(1);
+      return { sheet: 'Detalle', stacked: true, yTitle: 'km  \u00b7  horas  \u00b7  litros',
+        title: `Total ${usaOdo ? 'real ' : ''}${fmtKm(+kmReal.toFixed(1))} km \u00b7 ${fmtDur(min)} \u00b7 ${fmtKm(lts)} L de gasolina ($${Math.round(fuel.pesos).toLocaleString('es-CL')})`,
+        catCol: 'A', cats: [`${cat1} (km)`, 'Tiempo total (horas)', 'Gasolina (litros)'],
+        series: [...parts.map((x, i) => ({ title: x.t, vals: [+x.km.toFixed(1), null, null], color: PAL[i % PAL.length], name: true })),
+          { title: 'Horas', vals: [null, hrs, null], color: '475569', fmt: '0.0" h"' },
+          { title: 'Gasolina', vals: [null, null, lts], color: 'DC2626', fmt: '0.0" L"' }] };
+    };
     if (multiDay) {
       const byDay = {};
       D.forEach(d => { (byDay[d.r.date] = byDay[d.r.date] || []).push(d); });
@@ -1783,22 +1798,16 @@
         rows.push([first + i, [S(1, `${weekday(k)} ${dd.getDate()}-${pad(dd.getMonth() + 1)}`, 4), N(2, +dkm.toFixed(1)), N(3, ds.length, 10), N(4, ds.reduce((a, d) => a + d.stops.length, 0), 10),
           N(5, +(dmin / 60).toFixed(2)), N(6, +f.litros.toFixed(1)), N(7, Math.round(f.pesos), 11), N(8, ds.reduce((a, d) => a + d.ok, 0), 10), N(9, ds.reduce((a, d) => a + d.ko, 0), 10), odoKm(k) != null ? N(10, +odoKm(k).toFixed(1)) : S(10, '', 4)]]);
       });
-      chart = { H, first, title: 'Kil\u00f3metros por d\u00eda', catCol: 'A', cats: days.map(k => `${weekday(k)} ${dateObj(k).getDate()}`),
-        series: [{ col: 'B', title: 'Km', vals: days.map(k => +byDay[k].reduce((a, d) => a + d.km, 0).toFixed(1)), color: '1A73E8' }] };
+      chart = mk3(days.map(k => ({ t: `${weekday(k)} ${dateObj(k).getDate()}-${pad(dateObj(k).getMonth() + 1)}`, km: dayKm(k) })), 'Recorrido por d\u00edas');
     } else {
       const st = D.flatMap(d => [...d.stops.map(x => ({ label: `${D.length > 1 ? `R${routeNum(d.r)}-` : ''}${x.n}. ${x.name}`, tramo: x.tramo })),
         ...(d.backKm ? [{ label: `${D.length > 1 ? `R${routeNum(d.r)} ` : ''}\u21a9 Regreso a la base`, tramo: d.backKm }] : [])]);
       let acc = 0; st.forEach(x => { acc += x.tramo; x.acc = acc; });
       rows.push([H, ['Parada', 'Km tramo', 'Km acumulado'].map((h, j) => S(j + 1, h, 3))]);
       st.forEach((x, i) => rows.push([first + i, [S(1, x.label, 4), N(2, +x.tramo.toFixed(1)), N(3, +x.acc.toFixed(1))]]));
-      // Gr\u00e1fica de 3 barras: tramos apilados (uno encima del otro), total km y horas. Datos al final de la hoja Detalle.
-      const PAL = ['7E63A6', '3A9A82', '4A8FC6', 'E8A33D', 'E06C50', 'D45D93', '84A93B', '5B6CCB', '2BA3B8', 'B5794A', '9C5BB8', 'C9A227'];
       const sn = t => String(t || '').replace(/^(avenida|avda\.?|av\.?)\s+/i, '').slice(0, 18);
       const legs = []; D.forEach(d => { let pv = 'Bodega'; d.stops.forEach(x => { legs.push({ t: `${pv} \u2013 ${sn(x.name)}`, km: x.tramo }); pv = sn(x.name); }); if (d.backKm) legs.push({ t: `${pv} \u2013 Bodega`, km: d.backKm }); });
-      const hrs = +(min / 60).toFixed(1), cats = ['Recorrido por tramos', 'Total del d\u00eda (km)', 'Tiempo total (horas)'];
-      chart = { sheet: 'Detalle', stacked: true, yTitle: 'km  /  horas', title: `Total recorrido: ${km.toFixed(1).replace('.', ',')} km \u00b7 ${fmtDur(min)}`, catCol: 'A', cats,
-        series: [...legs.map((x, i) => ({ title: x.t, vals: [+x.km.toFixed(1), null, null], color: PAL[i % PAL.length], name: true })),
-          { title: 'Total km', vals: [null, +km.toFixed(1), null], color: '16A34A' }, { title: 'Horas', vals: [null, null, hrs], color: '475569', fmt: '0.0" h"' }] };
+      chart = mk3(legs, 'Recorrido por tramos');
     }
     const anchorRow = first + rows.filter(x => x[0] >= first).length + 2;
     // ===== Hoja 2: Detalle de paradas =====
