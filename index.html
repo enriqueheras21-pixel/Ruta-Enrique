@@ -198,7 +198,7 @@
   }
   const SERVICE_MIN = 4;                                 // minutos promedio por entrega
   const LATE = 10;                                       // castigo por minuto de atraso al optimizar
-  const APP_VERSION = 'v28';
+  const APP_VERSION = 'v29';
   const LKEY = 'ruta-enrique-v3';                        // misma clave de siempre: no se pierden rutas
   const DEFAULT_BASE = { address: 'Chile Espa\u00f1a 592', comuna: '\u00d1u\u00f1oa', lat: -33.4497, lng: -70.6036, precise: false };
   const NOTE_CHIPS = ['bodega', 'carga de pedido mayorista', 'despacho pedido mayorista', 'llegada estacionamiento', 'dejar en conserjer\u00eda', 'mercado libre env\u00edo'];
@@ -564,6 +564,7 @@
       if (['ruta de la manana', 'ruta de la tarde', 'ruta', 'ruta transferida'].includes(n) || /^ruta \d+$/.test(n) || n === norm(dateName(r.date)) || / \(copia\)$/.test(n)) r.name = '';
     }
     prefs.sampleAdded = true;
+    for (const r of Object.values(routes)) if (snapToBase(r)) r.geometry = null;   // arreglo: paradas en la misma direcci\u00f3n de la base
     // Arreglo unico: la Fiambreria quedo guardada en "Avenida Las Torres 1227" (era Pedro Torres 1227)
     if (!prefs.fixLasTorres) {
       prefs.fixLasTorres = true;
@@ -576,7 +577,16 @@
     try { localStorage.setItem(LKEY, JSON.stringify({ routes, prefs })); }
     catch { toast('No se pudo guardar: el tel\u00e9fono no tiene espacio para esta app.'); }
   }
+  // Si una parada es la misma direcci\u00f3n de la base, usar el punto exacto de la base
+  const streetKey = a => norm(a).replace(/\b(avenida|avda|av|calle|pasaje|psje)\b\.?/g, '').replace(/[^a-z0-9]/g, '');
+  function snapToBase(r) {
+    const b = (r && r.start && r.start.lat != null) ? r.start : prefs.base; if (!b || !r) return false;
+    const k = streetKey(b.address); let ch = false;
+    if (k) for (const st of r.stops) if (streetKey(st.address) === k && (st.lat !== b.lat || st.lng !== b.lng)) { st.lat = b.lat; st.lng = b.lng; st.precise = true; ch = true; }
+    return ch;
+  }
   function changed(r, { keepOptimized = false } = {}) {
+    snapToBase(r);
     if (!keepOptimized) r.optimized = false;
     r.geometry = null; r.updatedAt = Date.now();
     saveLocal(); refreshGeometry(r);
@@ -1699,11 +1709,13 @@
       chart = { H, first, title: 'Kil\u00f3metros por d\u00eda', catCol: 'A', cats: days.map(k => `${weekday(k)} ${dateObj(k).getDate()}`),
         series: [{ col: 'B', title: 'Km', vals: days.map(k => +byDay[k].reduce((a, d) => a + d.km, 0).toFixed(1)), color: '1A73E8' }] };
     } else {
-      const st = D.flatMap(d => d.stops.map(x => ({ ...x, tag: D.length > 1 ? `R${routeNum(d.r)}-${x.n}` : String(x.n) })));
-      rows.push([H, ['Parada', 'Km tramo', 'Km desde la base'].map((h, j) => S(j + 1, h, 3))]);
-      st.forEach((x, i) => rows.push([first + i, [S(1, `${x.tag}. ${x.name}`, 4), N(2, +x.tramo.toFixed(1)), N(3, +x.base.toFixed(1))]]));
-      chart = { H, first, title: 'Kil\u00f3metros por parada', catCol: 'A', cats: st.map(x => `${x.tag}. ${x.name}`.slice(0, 24)),
-        series: [{ col: 'B', title: 'Km tramo', vals: st.map(x => +x.tramo.toFixed(1)), color: '1A73E8' }, { col: 'C', title: 'Km desde la base', vals: st.map(x => +x.base.toFixed(1)), color: 'F59E0B' }] };
+      const st = D.flatMap(d => [...d.stops.map(x => ({ label: `${D.length > 1 ? `R${routeNum(d.r)}-` : ''}${x.n}. ${x.name}`, tramo: x.tramo })),
+        ...(d.backKm ? [{ label: `${D.length > 1 ? `R${routeNum(d.r)} ` : ''}\u21a9 Regreso a la base`, tramo: d.backKm }] : [])]);
+      let acc = 0; st.forEach(x => { acc += x.tramo; x.acc = acc; });
+      rows.push([H, ['Parada', 'Km tramo', 'Km acumulado'].map((h, j) => S(j + 1, h, 3))]);
+      st.forEach((x, i) => rows.push([first + i, [S(1, x.label, 4), N(2, +x.tramo.toFixed(1)), N(3, +x.acc.toFixed(1))]]));
+      chart = { H, first, title: `Kil\u00f3metros del d\u00eda \u00b7 Total: ${km.toFixed(1).replace('.', ',')} km`, catCol: 'A', cats: st.map(x => x.label.slice(0, 24)),
+        series: [{ col: 'B', title: 'Km tramo (desde la parada anterior)', vals: st.map(x => +x.tramo.toFixed(1)), color: '1A73E8' }, { col: 'C', title: 'Km acumulado (total que llevas)', vals: st.map(x => +x.acc.toFixed(1)), color: '16A34A' }] };
     }
     const anchorRow = first + chart.cats.length + 2;
     // ===== Hoja 2: Detalle de paradas =====
