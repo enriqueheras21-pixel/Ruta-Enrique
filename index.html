@@ -199,7 +199,7 @@
   }
   const SERVICE_MIN = 4;                                 // minutos promedio por entrega
   const LATE = 10;                                       // castigo por minuto de atraso al optimizar
-  const APP_VERSION = 'v33';
+  const APP_VERSION = 'v34';
   const LKEY = 'ruta-enrique-v3';                        // misma clave de siempre: no se pierden rutas
   const DEFAULT_BASE = { address: 'Chile Espa\u00f1a 592', comuna: '\u00d1u\u00f1oa', lat: -33.4497, lng: -70.6036, precise: false };
   const NOTE_CHIPS = ['bodega', 'carga de pedido mayorista', 'despacho pedido mayorista', 'llegada estacionamiento', 'dejar en conserjer\u00eda', 'mercado libre env\u00edo'];
@@ -1784,7 +1784,7 @@
       return { sheet: 'Detalle', stacked: true, yTitle: 'km  \u00b7  horas  \u00b7  litros',
         title: `Total ${usaOdo ? 'real ' : ''}${fmtKm(+kmReal.toFixed(1))} km \u00b7 ${fmtDur(min)} \u00b7 ${fmtKm(lts)} L de gasolina ($${Math.round(fuel.pesos).toLocaleString('es-CL')})`,
         catCol: 'A', cats: [`${cat1} (km)`, 'Tiempo total (horas)', 'Gasolina (litros)'],
-        series: [...parts.map((x, i) => ({ title: x.t, vals: [+x.km.toFixed(1), null, null], color: PAL[i % PAL.length], name: true })),
+        series: [...parts.map((x, i) => ({ title: x.t, vals: [+x.km.toFixed(1), null, null], color: x.color || PAL[i % PAL.length], name: parts.length > 1, fmt: parts.length > 1 ? undefined : '0.0" km"' })),
           { title: 'Horas', vals: [null, hrs, null], color: '475569', fmt: '0.0" h"' },
           { title: 'Gasolina', vals: [null, null, lts], color: 'DC2626', fmt: '0.0" L"' }] };
     };
@@ -1798,7 +1798,7 @@
         rows.push([first + i, [S(1, `${weekday(k)} ${dd.getDate()}-${pad(dd.getMonth() + 1)}`, 4), N(2, +dkm.toFixed(1)), N(3, ds.length, 10), N(4, ds.reduce((a, d) => a + d.stops.length, 0), 10),
           N(5, +(dmin / 60).toFixed(2)), N(6, +f.litros.toFixed(1)), N(7, Math.round(f.pesos), 11), N(8, ds.reduce((a, d) => a + d.ok, 0), 10), N(9, ds.reduce((a, d) => a + d.ko, 0), 10), odoKm(k) != null ? N(10, +odoKm(k).toFixed(1)) : S(10, '', 4)]]);
       });
-      chart = mk3(days.map(k => ({ t: `${weekday(k)} ${dateObj(k).getDate()}-${pad(dateObj(k).getMonth() + 1)}`, km: dayKm(k) })), 'Recorrido por d\u00edas');
+      chart = mk3([{ t: 'Distancia total', km: kmReal, color: '1A73E8' }], 'Distancia total');   // semanal/mensual: 3 barras simples (sin acumulativo)
     } else {
       const st = D.flatMap(d => [...d.stops.map(x => ({ label: `${D.length > 1 ? `R${routeNum(d.r)}-` : ''}${x.n}. ${x.name}`, tramo: x.tramo })),
         ...(d.backKm ? [{ label: `${D.length > 1 ? `R${routeNum(d.r)} ` : ''}\u21a9 Regreso a la base`, tramo: d.backKm }] : [])]);
@@ -1912,11 +1912,11 @@ ${chart.series.map((s, i) => ser(i, s)).join('')}
     ];
     return makeZip(files);
   }
-  // ---- Periodos: hoy, esta semana (lunes a domingo), este mes, y los anteriores ----
+  // ---- Periodos: hoy, esta semana (lunes a s\u00e1bado), este mes, y los anteriores ----
   function periodRange(kind) {
     const today = dateObj(dayStr(0)), d0 = new Date(today), d1 = new Date(today);
     const fmt = d => d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
-    if (kind === 'semana' || kind === 'semanaAnt') { const dow = (today.getDay() + 6) % 7; d0.setDate(today.getDate() - dow); d1.setDate(d0.getDate() + 6); if (kind === 'semanaAnt') { d0.setDate(d0.getDate() - 7); d1.setDate(d1.getDate() - 7); } }
+    if (kind === 'semana' || kind === 'semanaAnt') { const dow = (today.getDay() + 6) % 7; d0.setDate(today.getDate() - dow); d1.setTime(d0.getTime()); d1.setDate(d1.getDate() + 5); if (kind === 'semanaAnt') { d0.setDate(d0.getDate() - 7); d1.setDate(d1.getDate() - 7); } }
     if (kind === 'ayer') { d0.setDate(today.getDate() - 1); d1.setDate(today.getDate() - 1); }
     if (kind === 'mes') { d0.setDate(1); d1.setMonth(d1.getMonth() + 1, 0); }
     if (kind === 'mesAnt') { d0.setMonth(d0.getMonth() - 1, 1); d1.setDate(0); }
@@ -1958,7 +1958,7 @@ ${chart.series.map((s, i) => ser(i, s)).join('')}
         <div class="grid grid-cols-2 gap-2">
           <button data-rep="dia" class="${B} ${afterFinish ? 'border-blue-600 bg-blue-600 text-white' : ''}">\ud83d\udcc5 Hoy</button>
           <button data-rep="ayer" class="${B}">\u23ea Ayer</button></div>
-        <button data-rep="semana" class="${B}">\ud83d\uddd3 Informe semanal <span class="ml-auto text-xs font-semibold opacity-70">esta semana</span></button>
+        <button data-rep="semana" class="${B}">\ud83d\uddd3 Informe semanal <span class="ml-auto text-xs font-semibold opacity-70">lunes a s\u00e1bado</span></button>
         <button data-rep="mes" class="${B}">\ud83d\udcc6 Informe mensual <span class="ml-auto text-xs font-semibold opacity-70">este mes</span></button>
         <div class="grid grid-cols-2 gap-2 pt-1">
           <button data-rep="semanaAnt" class="h-11 rounded-xl border border-slate-300 text-sm font-semibold dark:border-slate-700">Semana pasada</button>
