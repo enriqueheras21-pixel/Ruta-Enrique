@@ -201,7 +201,7 @@
   }
   const SERVICE_MIN = 4;                                 // minutos promedio por entrega
   const LATE = 10;                                       // castigo por minuto de atraso al optimizar
-  const APP_VERSION = 'v39';
+  const APP_VERSION = 'v40';
   const LKEY = 'ruta-enrique-v3';                        // misma clave de siempre: no se pierden rutas
   const DEFAULT_BASE = { address: 'Chile Espa\u00f1a 592', comuna: '\u00d1u\u00f1oa', lat: -33.4497, lng: -70.6036, precise: false };
   const NOTE_CHIPS = ['bodega', 'carga de pedido mayorista', 'despacho pedido mayorista', 'llegada estacionamiento', 'dejar en conserjer\u00eda', 'mercado libre env\u00edo'];
@@ -1872,7 +1872,8 @@
     const km = D.reduce((a, d) => a + d.km, 0), min = D.reduce((a, d) => a + d.min, 0);
     const dates = [...new Set(D.map(d => d.r.date))].sort();
     const dayKmApp = k => D.filter(d => d.r.date === k).reduce((a, d) => a + d.km, 0);
-    const dayKm = k => odoKm(k) ?? dayKmApp(k);                       // km reales (od\u00f3metro) si los anot\u00f3; si no, los calculados
+    const dayKm = k => odoKm(k) ?? dayKmApp(k);
+    const dayStops = k => D.filter(d => d.r.date === k).reduce((a, d) => a + d.stops.length, 0);   // paradas (destinos) del d\u00eda                       // km reales (od\u00f3metro) si los anot\u00f3; si no, los calculados
     const odoDays = dates.filter(k => odoKm(k) != null), odoTot = odoDays.reduce((a, k) => a + odoKm(k), 0);
     const kmReal = dates.reduce((a, k) => a + dayKm(k), 0), usaOdo = odoDays.length > 0;
     const fuel = fuelOf(kmReal);
@@ -1933,15 +1934,17 @@
       const PAL = ['7E63A6', '3A9A82', '4A8FC6', 'E8A33D', 'E06C50', 'D45D93', '84A93B', '5B6CCB', '2BA3B8', 'B5794A', '9C5BB8', 'C9A227'];
       const hrs = +(min / 60).toFixed(1), lts = +fuel.litros.toFixed(1);
       return { sheet: 'Detalle', stacked: true, yTitle: 'km  \u00b7  horas  \u00b7  litros',
-        title: `Total ${usaOdo ? 'oficial ' : ''}${fmtKm(+kmReal.toFixed(1))} km \u00b7 ${fmtDur(min)} \u00b7 ${fmtKm(lts)} L de gasolina ($${Math.round(fuel.pesos).toLocaleString('es-CL')})`,
-        catCol: 'A', cats: parts.length > 1 ? [`${cat1} (km)`, `Total km${usaOdo ? ' (oficial)' : ''}`, 'Tiempo total (horas)', 'Gasolina (litros)'] : [`${cat1} (km)`, 'Tiempo total (horas)', 'Gasolina (litros)'],
-        series: parts.length > 1 ? [...parts.map((x, i) => ({ title: x.t, vals: [+x.km.toFixed(1), null, null, null], color: x.color || PAL[i % PAL.length], name: true })),
-          { title: 'Total km', vals: [null, +kmReal.toFixed(1), null, null], color: '16A34A', fmt: '0.0" km"' },
+        title: `Total ${usaOdo ? 'oficial ' : ''}${fmtKm(+kmReal.toFixed(1))} km \u00b7 ${nStops} paradas \u00b7 ${fmtDur(min)} \u00b7 ${fmtKm(lts)} L de gasolina ($${Math.round(fuel.pesos).toLocaleString('es-CL')})`,
+        catCol: 'A', cats: parts.length > 1 ? [`${cat1} (km)`, `Total km${usaOdo ? ' (oficial)' : ''}`, 'Paradas', 'Tiempo total (horas)', 'Gasolina (litros)'] : [`${cat1} (km)`, 'Paradas', 'Tiempo total (horas)', 'Gasolina (litros)'],
+        series: parts.length > 1 ? [...parts.map((x, i) => ({ title: x.t, vals: [+x.km.toFixed(1), null, null, null, null], color: x.color || PAL[i % PAL.length], name: true })),
+          { title: 'Total km', vals: [null, +kmReal.toFixed(1), null, null, null], color: '16A34A', fmt: '0.0" km"' },
+          { title: 'Paradas', vals: [null, null, nStops, null, null], color: 'F59E0B', fmt: '0" paradas"' },
+          { title: 'Horas', vals: [null, null, null, hrs, null], color: '475569', fmt: '0.0" h"' },
+          { title: 'Gasolina', vals: [null, null, null, null, lts], color: 'DC2626', fmt: '0.0" L"' }]
+        : [...parts.map((x, i) => ({ title: x.t, vals: [+x.km.toFixed(1), null, null, null], color: x.color || PAL[i % PAL.length], fmt: '0.0" km"' })),
+          { title: 'Paradas', vals: [null, nStops, null, null], color: 'F59E0B', fmt: '0" paradas"' },
           { title: 'Horas', vals: [null, null, hrs, null], color: '475569', fmt: '0.0" h"' },
-          { title: 'Gasolina', vals: [null, null, null, lts], color: 'DC2626', fmt: '0.0" L"' }]
-        : [...parts.map((x, i) => ({ title: x.t, vals: [+x.km.toFixed(1), null, null], color: x.color || PAL[i % PAL.length], fmt: '0.0" km"' })),
-          { title: 'Horas', vals: [null, hrs, null], color: '475569', fmt: '0.0" h"' },
-          { title: 'Gasolina', vals: [null, null, lts], color: 'DC2626', fmt: '0.0" L"' }] };
+          { title: 'Gasolina', vals: [null, null, null, lts], color: 'DC2626', fmt: '0.0" L"' }] };
     };
     if (multiDay) {
       const byDay = {};
@@ -1957,22 +1960,23 @@
       const [sa, sb] = span || [dates[0], dates[dates.length - 1]], hoyS = dayStr(0);
       const iso = dt => `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}`;
       const DN = ['Lunes', 'Martes', 'Mi\u00e9rcoles', 'Jueves', 'Viernes', 'S\u00e1bado'];
-      const simple = (title, cats, vals, color) => ({ sheet: 'Detalle', title, yTitle: 'km', catCol: 'A', cats, series: [{ title: 'Km', vals, color, fmt: '0.0' }], nolegend: true });
+      const simple = (title, cats, vals, color, stops) => ({ sheet: 'Detalle', title, yTitle: 'km', y2Title: 'paradas', catCol: 'A', cats,
+        series: [{ title: 'Km', vals, color, fmt: '0.0" km";-0.0;;' }, { title: 'Paradas', vals: stops, color: 'F59E0B', fmt: '0" par.";-0;;', line: true }] });
       chart.extra = [];
       if (periodo === 'Semanal') {
         const d0 = dateObj(sa); const days = DN.map((n, i) => { const x = new Date(d0); x.setDate(d0.getDate() + i); return { n, k: iso(x), d: x }; });
-        chart.extra.push(simple(`Kil\u00f3metros por d\u00eda \u00b7 lunes a s\u00e1bado (total ${fmtKm(+kmReal.toFixed(1))} km)`, days.map(x => `${x.n} ${x.d.getDate()}`), days.map(x => x.k > hoyS ? null : +dayKm(x.k).toFixed(1)), '1A73E8'));
+        chart.extra.push(simple(`Kil\u00f3metros y paradas por d\u00eda \u00b7 lunes a s\u00e1bado (total ${fmtKm(+kmReal.toFixed(1))} km \u00b7 ${nStops} paradas)`, days.map(x => `${x.n} ${x.d.getDate()}`), days.map(x => x.k > hoyS ? null : +dayKm(x.k).toFixed(1)), '1A73E8', days.map(x => x.k > hoyS ? null : dayStops(x.k))));
       } else {
         const weeks = []; let x = dateObj(sa); x.setDate(x.getDate() - (x.getDay() + 6) % 7);
         const end = dateObj(sb), mes = dt => dt.toLocaleDateString('es-CL', { month: 'short' }).replace('.', '');
         while (x <= end) { const ws = new Date(x), we = new Date(x); we.setDate(ws.getDate() + 5);
           const from = iso(ws) < sa ? dateObj(sa) : ws, to = iso(we) > sb ? end : we;
-          let kmw = 0; for (let d = new Date(from); d <= to; d.setDate(d.getDate() + 1)) kmw += dayKm(iso(d));
-          if (from <= to) weeks.push({ t: `Semana ${weeks.length + 1} (${from.getDate()}${mes(from) !== mes(to) ? ' ' + mes(from) : ''}\u2013${to.getDate()} ${mes(to)})`, km: kmw });
+          let kmw = 0, stw = 0; for (let d = new Date(from); d <= to; d.setDate(d.getDate() + 1)) { kmw += dayKm(iso(d)); stw += dayStops(iso(d)); }
+          if (from <= to) weeks.push({ t: `Semana ${weeks.length + 1} (${from.getDate()}${mes(from) !== mes(to) ? ' ' + mes(from) : ''}\u2013${to.getDate()} ${mes(to)})`, km: kmw, st: stw });
           x.setDate(x.getDate() + 7); }
-        chart.extra.push(simple(`Kil\u00f3metros por semana (lunes a s\u00e1bado) \u00b7 total ${fmtKm(+kmReal.toFixed(1))} km`, weeks.map(w => w.t), weeks.map(w => +w.km.toFixed(1)), '0EA5E9'));
+        chart.extra.push(simple(`Kil\u00f3metros y paradas por semana (lunes a s\u00e1bado) \u00b7 total ${fmtKm(+kmReal.toFixed(1))} km \u00b7 ${nStops} paradas`, weeks.map(w => w.t), weeks.map(w => +w.km.toFixed(1)), '0EA5E9', weeks.map(w => w.st)));
         if (dates.length > 1) { const ds = []; for (let d = dateObj(sa); d <= end; d.setDate(d.getDate() + 1)) if (d.getDay() !== 0 && iso(d) <= hoyS) ds.push(iso(d));
-          chart.extra.push(simple('Kil\u00f3metros por d\u00eda (lunes a s\u00e1bado)', ds.map(k => `${weekday(k).slice(0, 3)} ${dateObj(k).getDate()}`), ds.map(k => +dayKm(k).toFixed(1)), '1A73E8')); }
+          chart.extra.push(simple('Kil\u00f3metros y paradas por d\u00eda (lunes a s\u00e1bado)', ds.map(k => `${weekday(k).slice(0, 3)} ${dateObj(k).getDate()}`), ds.map(k => +dayKm(k).toFixed(1)), '1A73E8', ds.map(k => dayStops(k)))); }
       }
     } else {
       const st = D.flatMap(d => [...d.stops.map(x => ({ label: `${D.length > 1 ? `R${routeNum(d.r)}-` : ''}${x.n}. ${x.name}`, tramo: x.tramo })),
@@ -2033,10 +2037,10 @@ ${withDrawing ? '<drawing r:id="rId1"/>' : ''}</worksheet>`; };
 <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
 <c:roundedCorners val="0"/><c:chart><c:title><c:tx><c:rich><a:bodyPr/><a:p><a:pPr><a:defRPr sz="1400" b="1"/></a:pPr><a:r><a:t>${xe(chart.title)}</a:t></a:r></a:p></c:rich></c:tx><c:overlay val="0"/></c:title>
 <c:autoTitleDeleted val="0"/><c:plotArea><c:layout/><c:barChart><c:barDir val="col"/><c:grouping val="${chart.stacked ? 'stacked' : 'clustered'}"/><c:varyColors val="0"/>
-${chart.series.map((s, i) => ser(i, s)).join('')}
-<c:gapWidth val="${chart.stacked ? 50 : 80}"/>${chart.stacked ? '<c:overlap val="100"/>' : ''}<c:axId val="10"/><c:axId val="100"/></c:barChart>
+${chart.series.map((s, i) => s.line ? '' : ser(i, s)).join('')}
+<c:gapWidth val="${chart.stacked ? 50 : 80}"/>${chart.stacked ? '<c:overlap val="100"/>' : ''}<c:axId val="10"/><c:axId val="100"/></c:barChart>${chart.series.some(s => s.line) ? `<c:lineChart><c:grouping val="standard"/><c:varyColors val="0"/>${chart.series.map((s, i) => s.line ? ser(i, s).replace('<c:invertIfNegative val="0"/>', '').replace(/<c:spPr><a:solidFill><a:srgbClr val="(\w+)"\/><\/a:solidFill><\/c:spPr>/, '<c:spPr><a:ln w="28575"><a:solidFill><a:srgbClr val="$1"/></a:solidFill></a:ln></c:spPr><c:marker><c:symbol val="circle"/><c:size val="7"/><c:spPr><a:solidFill><a:srgbClr val="$1"/></a:solidFill></c:spPr></c:marker>').replace('<c:showLegendKey', '<c:dLblPos val="r"/><c:showLegendKey').replace('</c:ser>', '<c:smooth val="0"/></c:ser>') : '').join('')}<c:marker val="1"/><c:axId val="20"/><c:axId val="200"/></c:lineChart>` : ''}
 <c:catAx><c:axId val="10"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="0"/><c:axPos val="b"/><c:numFmt formatCode="General" sourceLinked="0"/><c:majorTickMark val="none"/><c:minorTickMark val="none"/><c:tickLblPos val="nextTo"/><c:crossAx val="100"/><c:crosses val="autoZero"/><c:auto val="1"/><c:lblAlgn val="ctr"/><c:lblOffset val="100"/><c:noMultiLvlLbl val="0"/></c:catAx>
-<c:valAx><c:axId val="100"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="0"/><c:axPos val="l"/><c:majorGridlines/><c:title><c:tx><c:rich><a:bodyPr/><a:p><a:r><a:t>${xe(chart.yTitle || 'km')}</a:t></a:r></a:p></c:rich></c:tx><c:overlay val="0"/></c:title><c:numFmt formatCode="0" sourceLinked="0"/><c:majorTickMark val="none"/><c:minorTickMark val="none"/><c:tickLblPos val="nextTo"/><c:crossAx val="10"/><c:crosses val="autoZero"/><c:crossBetween val="between"/></c:valAx>
+<c:valAx><c:axId val="100"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="0"/><c:axPos val="l"/><c:majorGridlines/><c:title><c:tx><c:rich><a:bodyPr/><a:p><a:r><a:t>${xe(chart.yTitle || 'km')}</a:t></a:r></a:p></c:rich></c:tx><c:overlay val="0"/></c:title><c:numFmt formatCode="0" sourceLinked="0"/><c:majorTickMark val="none"/><c:minorTickMark val="none"/><c:tickLblPos val="nextTo"/><c:crossAx val="10"/><c:crosses val="autoZero"/><c:crossBetween val="between"/></c:valAx>${chart.series.some(s => s.line) ? `<c:catAx><c:axId val="20"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="1"/><c:axPos val="b"/><c:majorTickMark val="none"/><c:minorTickMark val="none"/><c:tickLblPos val="nextTo"/><c:crossAx val="200"/><c:crosses val="autoZero"/><c:auto val="1"/><c:lblAlgn val="ctr"/><c:lblOffset val="100"/><c:noMultiLvlLbl val="0"/></c:catAx><c:valAx><c:axId val="200"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="0"/><c:axPos val="r"/><c:title><c:tx><c:rich><a:bodyPr/><a:p><a:r><a:t>${xe(chart.y2Title || '')}</a:t></a:r></a:p></c:rich></c:tx><c:overlay val="0"/></c:title><c:numFmt formatCode="0" sourceLinked="0"/><c:majorTickMark val="none"/><c:minorTickMark val="none"/><c:tickLblPos val="nextTo"/><c:crossAx val="20"/><c:crosses val="max"/><c:crossBetween val="between"/></c:valAx>` : ''}
 </c:plotArea>${chart.stacked || chart.nolegend ? '' : '<c:legend><c:legendPos val="b"/><c:overlay val="0"/></c:legend>'}<c:plotVisOnly val="0"/><c:dispBlanksAs val="gap"/></c:chart></c:chartSpace>`;
     };
     const drawing = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
