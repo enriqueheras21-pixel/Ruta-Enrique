@@ -206,7 +206,7 @@
   const svcOf = r => r.svcMin ?? prefs.svcMin ?? SERVICE_MIN;   // minutos por parada: de esta ruta, o el que Enrique dej\u00f3 por defecto
   const svcStop = (s, c) => (s.svcMin != null && s.svcMin !== '' ? +s.svcMin : c.svc);
   const LATE = 10;                                       // castigo por minuto de atraso al optimizar
-  const APP_VERSION = 'v45';
+  const APP_VERSION = 'v46';
   const LKEY = 'ruta-enrique-v3';                        // misma clave de siempre: no se pierden rutas
   const DEFAULT_BASE = { address: 'Chile Espa\u00f1a 592', comuna: '\u00d1u\u00f1oa', lat: -33.4497, lng: -70.6036, precise: false };
   const NOTE_CHIPS = ['bodega', 'carga de pedido mayorista', 'despacho pedido mayorista', 'llegada estacionamiento', 'dejar en conserjer\u00eda', 'mercado libre env\u00edo'];
@@ -2313,7 +2313,24 @@ ${chart.series.map((s, i) => s.line ? '' : ser(i, s)).join('')}
     if (kind === 'mesAnt') { d0.setMonth(d0.getMonth() - 1, 1); d1.setDate(0); }
     return [fmt(d0), fmt(d1)];
   }
-  async function exportPeriod(kind, range) {
+  // Mensaje listo para el jefe con el resumen del d\u00eda
+  function bossText(d) {
+    const rs = Object.values(routes).filter(r => r.date === d && r.stops.length);
+    const kmApp = rs.reduce((a, r) => a + totals(r).km, 0), ok = odoKm(d), km = ok ?? kmApp;
+    const min = rs.reduce((a, r) => a + Math.max(0, totals(r).durMin), 0);
+    const all = rs.flatMap(r => r.stops), ent = all.filter(x => x.status === 'delivered').length, noe = all.filter(x => x.status === 'failed').length;
+    const v = vehOf(rs[0]), f = fuelOf(km, v.kmL), far = all.filter(x => x.far).length, off = rs.reduce((a, r) => a + (r.offRoute || []).length, 0);
+    const lines = [
+      `${prefs.bossName ? 'Hola ' + prefs.bossName : 'Hola'}, te env\u00edo el informe de ruta del ${dateObj(d).toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long' }).replace(',', '')}.`,
+      `\ud83d\ude9a ${v.nombre}${v.patente ? ' ' + v.patente : ''}`,
+      `\ud83d\udccd ${ent} entregadas${noe ? `, ${noe} no entregadas` : ''} de ${all.length} paradas`,
+      `\ud83d\udee3 ${fmtKm(+km.toFixed(1))} km${ok != null ? ' (od\u00f3metro)' : ''} \u00b7 \u23f1 ${fmtDur(min)}`,
+      `\u26fd ${fmtKm(+f.litros.toFixed(1))} L aprox. (${money(f.pesos)})`,
+      ...(far || off ? [`\u26a0\ufe0f ${[far ? far + ' entrega(s) marcada(s) lejos de la direcci\u00f3n' : '', off ? off + ' salida(s) de ruta' : ''].filter(Boolean).join(' \u00b7 ')}`] : []),
+      'Saludos, Enrique'];
+    return lines.join('\n');
+  }
+  async function exportPeriod(kind, range, opts = {}) {
     const [a, b] = range || periodRange(kind);
     if (range && a > b) return toast('La fecha "desde" debe ser anterior a "hasta"');
     const list = Object.values(routes).filter(r => r.date >= a && r.date <= b && r.stops.length).sort((x, y) => (x.date || '').localeCompare(y.date || '') || (x.createdAt || 0) - (y.createdAt || 0));
@@ -2328,18 +2345,19 @@ ${chart.series.map((s, i) => s.line ? '' : ser(i, s)).join('')}
         caption: `${sheetDate(f.date)} ${hhmm(f.min)} \u00b7 ${fmtKm(f.litros)} L \u00b7 ${money(f.pesos)} (${money(f.unit)}/L)${f.note ? ' \u00b7 ' + f.note : ''}` }); bmp.close && bmp.close(); } catch {}
     }
     const blob = buildReport(list, PER, rango, [a, b], pics);
-    await shareBlob(blob, `informe-${PER.toLowerCase()}-${a}${a !== b ? '_al_' + b : ''}.xlsx`);
+    await shareBlob(blob, `informe-${PER.toLowerCase()}-${a}${a !== b ? '_al_' + b : ''}.xlsx`, opts.boss && a === b ? bossText(a) : (opts.boss ? `${prefs.bossName ? 'Hola ' + prefs.bossName : 'Hola'}, te env\u00edo el informe de rutas ${rango}. Saludos, Enrique` : undefined));
   }
   async function exportXlsx(r) {   // informe de una sola ruta
     if (!r || !r.stops.length) return toast('La ruta no tiene paradas para el informe');
     await shareBlob(buildReport([r], 'Diario', [sheetDate(r.date), sameDay(r).length > 1 ? `Ruta ${routeNum(r)}` : '', r.name].filter(Boolean).join(' \u00b7 ')),
       `informe-ruta-${r.date}${sameDay(r).length > 1 ? '-ruta' + routeNum(r) : ''}.xlsx`);
   }
-  async function shareBlob(blob, fname) {
+  async function shareBlob(blob, fname, text) {
     try {
       const f = new File([blob], fname, { type: blob.type });
-      if (navigator.canShare && navigator.canShare({ files: [f] })) { await navigator.share({ files: [f], title: 'Informe de rutas' }); return; }
+      if (navigator.canShare && navigator.canShare({ files: [f] })) { await navigator.share(text ? { files: [f], title: 'Informe de rutas', text } : { files: [f], title: 'Informe de rutas' }); return; }
     } catch (e) { if (e.name === 'AbortError') return; }
+    if (text) { try { await navigator.clipboard.writeText(text); toast('Mensaje copiado: p\u00e9galo junto al archivo'); } catch {} }
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = fname; a.click();
     toast('Informe Excel descargado: ' + fname);
   }
@@ -2351,9 +2369,14 @@ ${chart.series.map((s, i) => s.line ? '' : ser(i, s)).join('')}
     const B = 'flex h-14 w-full items-center gap-3 rounded-xl border-2 border-slate-200 px-4 text-left font-bold dark:border-slate-700';
     sheet(`${head(afterFinish ? '\ud83c\udfc1 Ruta terminada' : '\ud83d\udcca Informes en Excel')}
       ${afterFinish ? '<p class="-mt-2 mb-3 text-sm text-slate-600 dark:text-slate-400">\u00bfQuieres generar el informe del d\u00eda?</p>' : '<p class="-mt-2 mb-3 text-sm text-slate-600 dark:text-slate-400">Km, horas, combustible, paradas y gr\u00e1fico de barras.</p>'}
+      <div class="mb-3 rounded-2xl border-2 border-green-600 p-3">
+        <button id="bossGo" class="flex h-14 w-full items-center justify-center gap-2 rounded-xl bg-green-600 text-lg font-bold text-white">\ud83d\udce4 Enviar al jefe \u00b7 informe de hoy</button>
+        <label class="mt-2 flex items-center gap-2 text-xs font-semibold text-slate-500">Saludar a:<input id="bossName" class="h-9 flex-1 rounded-lg border border-slate-300 bg-transparent px-2 text-sm dark:border-slate-700" placeholder="nombre del jefe (opcional)" value="${esc(prefs.bossName || '')}"></label>
+        <p class="mt-1 text-xs text-slate-500">Se abre WhatsApp, Gmail u otra app con el Excel y un mensaje con el resumen. T\u00fa eliges a qui\u00e9n se lo mandas.</p>
+      </div>
       <div class="space-y-2">
         <div class="grid grid-cols-2 gap-2">
-          <button data-rep="dia" class="${B} ${afterFinish ? 'border-blue-600 bg-blue-600 text-white' : ''}">\ud83d\udcc5 Hoy</button>
+          <button data-rep="dia" class="${B}">\ud83d\udcc5 Hoy</button>
           <button data-rep="ayer" class="${B}">\u23ea Ayer</button></div>
         <button data-rep="semana" class="${B}">\ud83d\uddd3 Informe semanal <span class="ml-auto text-xs font-semibold opacity-70">lunes a s\u00e1bado</span></button>
         <button data-rep="mes" class="${B}">\ud83d\udcc6 Informe mensual <span class="ml-auto text-xs font-semibold opacity-70">este mes</span></button>
@@ -2372,6 +2395,8 @@ ${chart.series.map((s, i) => s.line ? '' : ser(i, s)).join('')}
         <button id="repRangoGo" class="mt-2 h-11 w-full rounded-xl border-2 border-blue-600 font-bold text-blue-700 dark:text-blue-300">Generar informe de ese per\u00edodo</button>
       </div>`);
     document.querySelectorAll('[data-rep]').forEach(b => b.onclick = () => { closeModal(); exportPeriod(b.dataset.rep); });
+    $('bossName').onchange = () => { prefs.bossName = $('bossName').value.trim(); saveLocal(); };
+    $('bossGo').onclick = () => { prefs.bossName = $('bossName').value.trim(); saveLocal(); closeModal(); exportPeriod('dia', null, { boss: true }); };
     document.querySelectorAll('[data-dia]').forEach(b => b.onclick = () => { closeModal(); exportPeriod(null, [b.dataset.dia, b.dataset.dia]); });
     $('repDiaGo').onclick = () => { const d = $('repDia').value; if (!d) return toast('Elige un d\u00eda'); closeModal(); exportPeriod(null, [d, d]); };
     $('repRangoGo').onclick = () => { const a = $('repDesde').value, b = $('repHasta').value; if (!a || !b) return toast('Elige las dos fechas'); if (a > b) return toast('"Desde" debe ser antes de "Hasta"'); closeModal(); exportPeriod(null, [a, b]); };
