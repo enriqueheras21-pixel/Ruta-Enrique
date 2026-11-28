@@ -206,7 +206,7 @@
   const svcOf = r => r.svcMin ?? prefs.svcMin ?? SERVICE_MIN;   // minutos por parada: de esta ruta, o el que Enrique dej\u00f3 por defecto
   const svcStop = (s, c) => (s.svcMin != null && s.svcMin !== '' ? +s.svcMin : c.svc);
   const LATE = 10;                                       // castigo por minuto de atraso al optimizar
-  const APP_VERSION = 'v49';
+  const APP_VERSION = 'v50';
   const LKEY = 'ruta-enrique-v3';                        // misma clave de siempre: no se pierden rutas
   const DEFAULT_BASE = { address: 'Chile Espa\u00f1a 592', comuna: '\u00d1u\u00f1oa', lat: -33.4497, lng: -70.6036, precise: false };
   const NOTE_CHIPS = ['bodega', 'carga de pedido mayorista', 'despacho pedido mayorista', 'llegada estacionamiento', 'dejar en conserjer\u00eda', 'mercado libre env\u00edo'];
@@ -2059,7 +2059,7 @@
       ['Distancia total (km)', N(2, +kmReal.toFixed(1), 7), S(3, (D.length > 1 ? `${D.length} rutas` : '1 ruta') + (usaOdo ? ` \u00b7 OFICIAL seg\u00fan od\u00f3metro${odoDays.length < dates.length ? ' (d\u00edas sin lectura: calculado)' : ''} \u00b7 la app calcul\u00f3 ${fmtKm(+km.toFixed(1))} km` : ' \u00b7 calculado por la app'))],
       ['Tiempo total (horas)', N(2, +(min / 60).toFixed(2), 7), S(3, fmtDur(min))],
       ['N\u00famero de paradas', N(2, nStops, 9), S(3, `${ok} entregadas \u00b7 ${ko} no entregadas \u00b7 ${nStops - ok - ko} pendientes`)],
-      ['Parada m\u00e1s lejana desde la base (km en l\u00ednea recta)', N(2, far ? +far.recta.toFixed(1) : 0, 7), S(3, far ? `${far.name} (${far.label}) \u00b7 ${fmtKm(+far.recta.toFixed(1))} km en l\u00ednea recta desde ${prefs.base ? prefs.base.address : 'la base'} (distancia, no recorrido)` : '')],
+      ['Parada m\u00e1s lejana desde la base (km en l\u00ednea recta)', N(2, far ? +far.recta.toFixed(1) : 0, 7), S(3, far ? `${far.name} (${far.label}) \u00b7 ${fmtKm(+far.recta.toFixed(1))} km en l\u00ednea recta desde ${prefs.base ? prefs.base.address : 'la base'} (distancia, no recorrido; por calle son ${fmtKm(+far.base.toFixed(1))} km)` : '')],
       ['Veh\u00edculo', S(2, vehs.map(v => v.patente || v.nombre).join(' / '), 8), S(3, vehs.map(vehTxt).join(' | '))],
       ['Combustible aprox. (litros)', N(2, +fuel.litros.toFixed(1), 7), S(3, `rendimiento ${vehs.map(v => String(v.kmL).replace('.', ',')).join(' / ')} km/L (${vehs.map(v => v.patente || v.nombre).join(' / ')}) sobre ${fmtKm(+kmReal.toFixed(1))} km${usaOdo ? ' reales' : ''}`)],
       ['Gasto aprox. en combustible ($)', N(2, Math.round(fuel.pesos), 6), S(3, `a $${(prefs.precioLitro || 0).toLocaleString('es-CL')} por litro`)],
@@ -2171,10 +2171,10 @@
     // ===== Hoja 2: Detalle de paradas =====
     const rows2 = [];
     rows2.push([1, [S(1, `Detalle de paradas \u00b7 ${rango}`, 1)]]);
-    rows2.push([3, ['Fecha / Ruta', '#', 'Parada', 'Direcci\u00f3n', 'Km tramo', 'Km desde la base (l\u00ednea recta)', 'Hora estimada', 'Hora real', 'Estado', 'Notas'].map((h, j) => S(j + 1, h, 3))]);
+    rows2.push([3, ['Fecha / Ruta', '#', 'Parada', 'Direcci\u00f3n', 'Km tramo', 'Km desde la base (por calle)', 'Hora estimada', 'Hora real', 'Estado', 'Notas'].map((h, j) => S(j + 1, h, 3))]);
     let rn = 4;
     D.forEach(d => {
-      d.stops.forEach(x => rows2.push([rn++, [S(1, d.label, 4), S(2, String(x.n), 4), S(3, x.name, 4), S(4, x.addr, 4), N(5, +x.tramo.toFixed(1)), N(6, +x.recta.toFixed(1)), S(7, x.est, 4), S(8, x.real, 4), S(9, x.estado, 4), S(10, x.notes, 4)]]));
+      d.stops.forEach(x => rows2.push([rn++, [S(1, d.label, 4), S(2, String(x.n), 4), S(3, x.name, 4), S(4, x.addr, 4), N(5, +x.tramo.toFixed(1)), N(6, +x.base.toFixed(1)), S(7, x.est, 4), S(8, x.real, 4), S(9, x.estado, 4), S(10, x.notes, 4)]]));
       if (d.backKm) rows2.push([rn++, [S(1, d.label, 4), S(2, '', 4), S(3, 'Regreso a la base', 4), S(4, fullAddress(d.r.start), 4), N(5, +d.backKm.toFixed(1)), N(6, 0), S(7, hhmm(d.t.endEst), 4), S(8, d.t.endReal != null ? hhmm(d.t.endReal) : '', 4), S(9, '', 4), S(10, '', 4)]]);
     });
     for (const ch of [chart, ...(chart.extra || [])]) if (ch.sheet === 'Detalle') {
