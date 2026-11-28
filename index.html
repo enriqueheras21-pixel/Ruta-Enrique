@@ -206,7 +206,7 @@
   const svcOf = r => r.svcMin ?? prefs.svcMin ?? SERVICE_MIN;   // minutos por parada: de esta ruta, o el que Enrique dej\u00f3 por defecto
   const svcStop = (s, c) => (s.svcMin != null && s.svcMin !== '' ? +s.svcMin : c.svc);
   const LATE = 10;                                       // castigo por minuto de atraso al optimizar
-  const APP_VERSION = 'v47';
+  const APP_VERSION = 'v48';
   const LKEY = 'ruta-enrique-v3';                        // misma clave de siempre: no se pierden rutas
   const DEFAULT_BASE = { address: 'Chile Espa\u00f1a 592', comuna: '\u00d1u\u00f1oa', lat: -33.4497, lng: -70.6036, precise: false };
   const NOTE_CHIPS = ['bodega', 'carga de pedido mayorista', 'despacho pedido mayorista', 'llegada estacionamiento', 'dejar en conserjer\u00eda', 'mercado libre env\u00edo'];
@@ -2018,11 +2018,13 @@
   // ---- Datos de una ruta para los informes ----
   function routeData(r) {
     const t = totals(r), m = M(r), dep = depotOf(r);
+    // distancia directa desde la BASE (Chile Espa\u00f1a 592), sin importar las paradas del camino
+    const B = prefs.base && prefs.base.lat != null ? prefs.base : r.start, sameBase = Math.abs(B.lat - dep.lat) < 1e-4 && Math.abs(B.lng - dep.lng) < 1e-4;
     let prev = dep;
     const stops = r.stops.map((s, i) => {
-      const tramo = m.dist(prev, s), base = m.dist(dep, s); prev = s;
+      const tramo = m.dist(prev, s), base = sameBase ? m.dist(dep, s) : HAV.dist(B, s), recta = havKm(B, s); prev = s;
       const est = s.status === 'pending' ? s.etaMin : (s.plannedMin ?? s.etaMin);
-      return { n: i + 1, name: s.customerName || s.address, addr: fullAddress(s), tramo, base,
+      return { n: i + 1, name: s.customerName || s.address, addr: fullAddress(s), tramo, base, recta,
         est: est != null ? hhmm(est) : '', real: s.status !== 'pending' && s.doneMin != null ? hhmm(s.doneMin) : '',
         estado: s.status === 'delivered' ? 'Entregada' : s.status === 'failed' ? 'No entregada' : 'Pendiente', notes: s.notes || '' };
     });
@@ -2057,7 +2059,7 @@
       ['Distancia total (km)', N(2, +kmReal.toFixed(1), 7), S(3, (D.length > 1 ? `${D.length} rutas` : '1 ruta') + (usaOdo ? ` \u00b7 OFICIAL seg\u00fan od\u00f3metro${odoDays.length < dates.length ? ' (d\u00edas sin lectura: calculado)' : ''} \u00b7 la app calcul\u00f3 ${fmtKm(+km.toFixed(1))} km` : ' \u00b7 calculado por la app'))],
       ['Tiempo total (horas)', N(2, +(min / 60).toFixed(2), 7), S(3, fmtDur(min))],
       ['N\u00famero de paradas', N(2, nStops, 9), S(3, `${ok} entregadas \u00b7 ${ko} no entregadas \u00b7 ${nStops - ok - ko} pendientes`)],
-      ['Parada m\u00e1s lejana (km desde la base)', N(2, far ? +far.base.toFixed(1) : 0, 7), S(3, far ? `${far.name} (${far.label})` : '')],
+      ['Parada m\u00e1s lejana desde la base (km)', N(2, far ? +far.base.toFixed(1) : 0, 7), S(3, far ? `${far.name} (${far.label}) \u00b7 ${fmtKm(+far.base.toFixed(1))} km por calle y ${fmtKm(+far.recta.toFixed(1))} km en l\u00ednea recta desde ${prefs.base ? prefs.base.address : 'la base'}, sin contar las paradas del camino` : '')],
       ['Veh\u00edculo', S(2, vehs.map(v => v.patente || v.nombre).join(' / '), 8), S(3, vehs.map(vehTxt).join(' | '))],
       ['Combustible aprox. (litros)', N(2, +fuel.litros.toFixed(1), 7), S(3, `rendimiento ${vehs.map(v => String(v.kmL).replace('.', ',')).join(' / ')} km/L (${vehs.map(v => v.patente || v.nombre).join(' / ')}) sobre ${fmtKm(+kmReal.toFixed(1))} km${usaOdo ? ' reales' : ''}`)],
       ['Gasto aprox. en combustible ($)', N(2, Math.round(fuel.pesos), 6), S(3, `a $${(prefs.precioLitro || 0).toLocaleString('es-CL')} por litro`)],
